@@ -1,0 +1,23 @@
+{
+    "name": "Vant.Framework",
+    "rootNamespace": "Vant",
+    "references": [
+        "UniTask",
+        "endel.nativewebsocket",
+        "Unity.Addressables",
+        "Unity.ResourceManager",
+        "DOTween.Modules",
+        "UniTask.Addressables",
+        "UniTask.DOTween",
+        "Luban.Runtime"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
