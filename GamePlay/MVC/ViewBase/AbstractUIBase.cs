@@ -31,7 +31,7 @@ namespace Vant.MVC
 
         private Canvas _canvas;
         private CanvasGroup _canvasGroup;
-        
+
         // 附加 UI 列表
         private readonly List<AbstractSubUI> _subUIs = new List<AbstractSubUI>();
 
@@ -82,6 +82,8 @@ namespace Vant.MVC
 
             // 4. 打开后处理
             await OnAfterOpen();
+
+            appCore.Notifier.Dispatch(UICommonEvent.UI_OPENED, Config.Name);
         }
 
         internal async UniTask InternalClose()
@@ -100,6 +102,7 @@ namespace Vant.MVC
             }
 
             gameObject.SetActive(false);
+            appCore.Notifier.Dispatch(UICommonEvent.UI_CLOSED, Config.Name);
         }
 
         internal void InternalDestroy()

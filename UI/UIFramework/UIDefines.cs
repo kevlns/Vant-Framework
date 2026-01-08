@@ -46,7 +46,9 @@ namespace Vant.UI.UIFramework
     public enum UICommonEvent
     {
         OPEN_UI,
-        CLOSE_UI
+        CLOSE_UI,
+        UI_OPENED,
+        UI_CLOSED
     }
 
     /// <summary>
