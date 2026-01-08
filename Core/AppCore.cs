@@ -99,6 +99,8 @@ namespace Vant.Core
         /// </summary>
         public IAssetManager FallbackAssetManager { get; private set; }
 
+        public TaskManager TaskManager { get; private set; }
+
         private IGameLifeCycle _gameLifeCycle;
 
         public AppCore(IGameLifeCycle gameLifeCycle)
@@ -128,6 +130,9 @@ namespace Vant.Core
 
             // 6. 初始化网络管理器
             NetManager = new NetManager(this);
+
+            // 7. 初始化任务管理器
+            TaskManager = new TaskManager(this);
 
             GameLifeCycleSubscribe();
         }

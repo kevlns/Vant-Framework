@@ -22,7 +22,7 @@ namespace Vant.UI.UIComponents.Editor
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-            
+
             EditorGUILayout.BeginHorizontal();
             EditorGUI.BeginChangeCheck();
             _useNamespace = EditorGUILayout.ToggleLeft("Use Namespace", _useNamespace, GUILayout.Width(110));
@@ -41,7 +41,7 @@ namespace Vant.UI.UIComponents.Editor
             EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.PropertyField(serializedObject.FindProperty("skinName"), new GUIContent("Skin Name"));
-            
+
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.PropertyField(serializedObject.FindProperty("generatePath"), new GUIContent("Generate Path (Relative to Assets)"));
             if (GUILayout.Button("...", GUILayout.Width(30)))
@@ -61,7 +61,7 @@ namespace Vant.UI.UIComponents.Editor
                 }
             }
             EditorGUILayout.EndHorizontal();
-            
+
             EditorGUILayout.Space();
             EditorGUILayout.LabelField("Reference Configuration", EditorStyles.boldLabel);
 
@@ -74,7 +74,7 @@ namespace Vant.UI.UIComponents.Editor
             {
                 DrawReferenceItem(i);
             }
-            
+
             if (GUI.changed)
             {
                 EditorUtility.SetDirty(_target);
@@ -85,7 +85,7 @@ namespace Vant.UI.UIComponents.Editor
             {
                 GenerateCode();
             }
-            
+
             serializedObject.ApplyModifiedProperties();
         }
 
@@ -96,7 +96,7 @@ namespace Vant.UI.UIComponents.Editor
 
             EditorGUILayout.BeginVertical("box");
             EditorGUILayout.BeginHorizontal();
-            
+
             EditorGUILayout.LabelField("Alias:", GUILayout.Width(40));
             item.alias = EditorGUILayout.TextField(item.alias, GUILayout.Width(200));
 
@@ -150,16 +150,16 @@ namespace Vant.UI.UIComponents.Editor
                     item.boolValue = EditorGUILayout.Toggle("Value", item.boolValue);
                     break;
             }
-            
+
             EditorGUILayout.EndVertical();
         }
 
         private void DrawObjectField(ReferenceContainerGenerator.ReferenceData item)
         {
             EditorGUILayout.BeginHorizontal();
-            
+
             EditorGUILayout.LabelField("Ref:", GUILayout.Width(40));
-            
+
             EditorGUI.BeginChangeCheck();
             item.objectValue = (UnityEngine.Object)EditorGUILayout.ObjectField(GUIContent.none, item.objectValue, typeof(UnityEngine.Object), true, GUILayout.Width(200));
             if (EditorGUI.EndChangeCheck())
@@ -169,7 +169,7 @@ namespace Vant.UI.UIComponents.Editor
                     item.typeName = item.objectValue.GetType().FullName;
                 }
             }
-            
+
             DrawTypeDropdown(item, item.objectValue);
             EditorGUILayout.EndHorizontal();
         }
@@ -178,13 +178,13 @@ namespace Vant.UI.UIComponents.Editor
         {
             EditorGUILayout.BeginHorizontal();
             EditorGUILayout.LabelField("Element Type:", GUILayout.Width(100));
-            
+
             UnityEngine.Object sample = null;
             if (item.objectArrayValue != null && item.objectArrayValue.Length > 0)
             {
-                foreach(var obj in item.objectArrayValue) if(obj != null) { sample = obj; break; }
+                foreach (var obj in item.objectArrayValue) if (obj != null) { sample = obj; break; }
             }
-            
+
             DrawTypeDropdown(item, sample);
             EditorGUILayout.EndHorizontal();
 
@@ -193,7 +193,7 @@ namespace Vant.UI.UIComponents.Editor
             {
                 var itemProp = referencesProp.GetArrayElementAtIndex(index);
                 var arrayProp = itemProp.FindPropertyRelative("objectArrayValue");
-                
+
                 EditorGUI.indentLevel++;
                 EditorGUILayout.BeginHorizontal();
                 arrayProp.isExpanded = EditorGUILayout.Foldout(arrayProp.isExpanded, "List Content", true);
@@ -268,28 +268,29 @@ namespace Vant.UI.UIComponents.Editor
             sb.AppendLine("using UnityEngine.UI;");
             sb.AppendLine("using System.Collections.Generic;");
             sb.AppendLine("using Vant.UI.UIComponents;");
+            sb.AppendLine("using Van.System.Guide;");
             sb.AppendLine();
-            
+
             bool hasNamespace = !string.IsNullOrEmpty(_target.namespaceName);
             string indent = "";
-            
+
             if (hasNamespace)
             {
                 sb.AppendLine($"namespace {_target.namespaceName}");
                 sb.AppendLine("{");
                 indent = "    ";
             }
-            
+
             sb.AppendLine($"{indent}public class {_target.skinName}");
             sb.AppendLine($"{indent}{{");
             sb.AppendLine($"{indent}    public GameObject gameObject;");
-            
+
             foreach (var refData in _target.references)
             {
                 if (string.IsNullOrEmpty(refData.alias)) continue;
 
                 string typeStr = "object";
-                
+
                 switch (refData.type)
                 {
                     case ReferenceContainerGenerator.ReferenceType.Object:
@@ -307,10 +308,10 @@ namespace Vant.UI.UIComponents.Editor
                     case ReferenceContainerGenerator.ReferenceType.String: typeStr = "string"; break;
                     case ReferenceContainerGenerator.ReferenceType.Bool: typeStr = "bool"; break;
                 }
-                
+
                 sb.AppendLine($"{indent}    public {typeStr} {refData.alias};");
             }
-            
+
             sb.AppendLine();
             sb.AppendLine($"{indent}    public {_target.skinName}(GameObject gameObject)");
             sb.AppendLine($"{indent}    {{");
@@ -321,19 +322,19 @@ namespace Vant.UI.UIComponents.Editor
             sb.AppendLine($"{indent}    {{");
             sb.AppendLine($"{indent}        this.gameObject = gameObject;");
             sb.AppendLine($"{indent}        var generator = gameObject.GetComponent<ReferenceContainerGenerator>();");
-            
+
             foreach (var refData in _target.references)
             {
-                 if (string.IsNullOrEmpty(refData.alias)) continue;
+                if (string.IsNullOrEmpty(refData.alias)) continue;
 
-                 string genericArg = "";
-                 switch (refData.type)
-                 {
+                string genericArg = "";
+                switch (refData.type)
+                {
                     case ReferenceContainerGenerator.ReferenceType.Object:
-                        genericArg = $"<{ (string.IsNullOrEmpty(refData.typeName) ? "UnityEngine.Object" : refData.typeName) }>";
+                        genericArg = $"<{(string.IsNullOrEmpty(refData.typeName) ? "UnityEngine.Object" : refData.typeName)}>";
                         break;
                     case ReferenceContainerGenerator.ReferenceType.ObjectArray:
-                        genericArg = $"<{ (string.IsNullOrEmpty(refData.typeName) ? "UnityEngine.Object" : refData.typeName) }[]>";
+                        genericArg = $"<{(string.IsNullOrEmpty(refData.typeName) ? "UnityEngine.Object" : refData.typeName)}[]>";
                         break;
                     case ReferenceContainerGenerator.ReferenceType.Int: genericArg = "<int>"; break;
                     case ReferenceContainerGenerator.ReferenceType.Int2: genericArg = "<Vector2Int>"; break;
@@ -343,21 +344,55 @@ namespace Vant.UI.UIComponents.Editor
                     case ReferenceContainerGenerator.ReferenceType.Float3: genericArg = "<Vector3>"; break;
                     case ReferenceContainerGenerator.ReferenceType.String: genericArg = "<string>"; break;
                     case ReferenceContainerGenerator.ReferenceType.Bool: genericArg = "<bool>"; break;
-                 }
+                }
 
-                 sb.AppendLine($"{indent}        {refData.alias} = generator.Get{genericArg}(\"{refData.alias}\");");
+                sb.AppendLine($"{indent}        {refData.alias} = generator.Get{genericArg}(\"{refData.alias}\");");
+
+                // Auto-register UGUI Buttons for Guide click manager.
+                // Key format: SkinClassName/Alias
+                if (refData.type == ReferenceContainerGenerator.ReferenceType.Object)
+                {
+                    var tn = refData.typeName;
+                    var isButton = tn == "UnityEngine.UI.Button" || tn == "Button";
+                    if (isButton)
+                    {
+                        var key = $"{_target.skinName}/{refData.alias}";
+                        sb.AppendLine($"{indent}        if ({refData.alias} != null)");
+                        sb.AppendLine($"{indent}        {{");
+                        sb.AppendLine($"{indent}            ClickableTargetManager.RegisterTarget(new ClickableWrapper()");
+                        sb.AppendLine($"{indent}            {{");
+                        sb.AppendLine($"{indent}                key = \"{key}\",");
+                        sb.AppendLine($"{indent}                handle = {refData.alias}.gameObject");
+                        sb.AppendLine($"{indent}                ,autoBindButtonOnClick = true");
+                        sb.AppendLine($"{indent}            }});");
+                        sb.AppendLine($"{indent}        }}");
+                    }
+                }
             }
-            
+
             sb.AppendLine($"{indent}    }}");
 
             sb.AppendLine($"{indent}    public void Dispose()");
             sb.AppendLine($"{indent}    {{");
+
+            // Auto-unregister UGUI Buttons from Guide click manager.
+            foreach (var refData in _target.references)
+            {
+                if (string.IsNullOrEmpty(refData.alias)) continue;
+                if (refData.type != ReferenceContainerGenerator.ReferenceType.Object) continue;
+                var tn = refData.typeName;
+                var isButton = tn == "UnityEngine.UI.Button" || tn == "Button";
+                if (!isButton) continue;
+                var key = $"{_target.skinName}/{refData.alias}";
+                sb.AppendLine($"{indent}        ClickableTargetManager.UnregisterTarget(\"{key}\");");
+            }
+
             sb.AppendLine($"{indent}        gameObject = null;");
             foreach (var refData in _target.references)
             {
                 if (string.IsNullOrEmpty(refData.alias)) continue;
-                
-                if (refData.type == ReferenceContainerGenerator.ReferenceType.Object || 
+
+                if (refData.type == ReferenceContainerGenerator.ReferenceType.Object ||
                     refData.type == ReferenceContainerGenerator.ReferenceType.ObjectArray ||
                     refData.type == ReferenceContainerGenerator.ReferenceType.String)
                 {
@@ -367,7 +402,7 @@ namespace Vant.UI.UIComponents.Editor
             sb.AppendLine($"{indent}    }}");
 
             sb.AppendLine($"{indent}}}");
-            
+
             if (hasNamespace)
             {
                 sb.AppendLine("}");
@@ -378,7 +413,7 @@ namespace Vant.UI.UIComponents.Editor
             {
                 Directory.CreateDirectory(fullPath);
             }
-            
+
             string filePath = Path.Combine(fullPath, _target.skinName + ".cs");
             File.WriteAllText(filePath, sb.ToString());
             AssetDatabase.Refresh();

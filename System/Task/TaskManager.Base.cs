@@ -1,0 +1,44 @@
+using System;
+using System.Collections.Generic;
+using System.Threading;
+using Cysharp.Threading.Tasks;
+using UnityEngine;
+using Vant.Core;
+
+namespace Vant.System
+{
+    public partial class TaskManager
+    {
+        private AppCore _appCore;
+        private readonly object _gate = new object();
+        private static TaskManager _instance;
+
+        public TaskManager(AppCore appCore)
+        {
+            _appCore = appCore;
+            _defaultChain = new TaskChain(this, needFuse: false);
+            _instance = this;
+        }
+
+        /// <summary>
+        /// Reset：取消并释放上一轮 CTS，然后创建新一轮 CTS
+        /// </summary>
+        public void Reset()
+        {
+            CancellationTokenSource old;
+            lock (_gate)
+            {
+                old = _cts;
+                _cts = new CancellationTokenSource();
+            }
+
+            // Cancel 会触发旧 token 的所有注册回调
+            try { old.Cancel(); }
+            finally
+            {
+                old.Dispose();
+                _defaultChain.ResetCTS();
+            }
+        }
+    }
+}
