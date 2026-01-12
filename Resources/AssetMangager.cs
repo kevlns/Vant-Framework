@@ -25,14 +25,10 @@ namespace Vant.Resources
         UniTask PreloadAssetAsync<T>(string path) where T : Object;
 
         /// <summary>
-        /// 预加载 UI/Prefab (GameObject)。
+        /// 预加载资源（只加载不实例化），用于提前占用引用计数，避免进入界面时卡顿。
+        /// 调用后需要在合适时机使用 ReleaseAsset/ReleaseInstance 释放引用。
         /// </summary>
-        UniTask PreloadGameObjectAsync(string path);
-
-        /// <summary>
-        /// 批量预加载 UI/Prefab (GameObject)。
-        /// </summary>
-        UniTask PreloadGameObjectsAsync(IEnumerable<string> paths);
+        UniTask PreloadAssetsAsync<T>(IEnumerable<string> paths) where T : Object;
 
         /// <summary>
         /// 异步加载并实例化 GameObject
@@ -95,19 +91,14 @@ namespace Vant.Resources
             await LoadAssetAsync<T>(path);
         }
 
-        public virtual async UniTask PreloadGameObjectAsync(string path)
-        {
-            await LoadAssetAsync<GameObject>(path);
-        }
-
-        public virtual async UniTask PreloadGameObjectsAsync(IEnumerable<string> paths)
+        public virtual async UniTask PreloadAssetsAsync<T>(IEnumerable<string> paths) where T : Object
         {
             if (paths == null) return;
 
             foreach (var path in paths)
             {
                 if (string.IsNullOrEmpty(path)) continue;
-                await LoadAssetAsync<GameObject>(path);
+                await PreloadAssetAsync<T>(path);
             }
         }
 
@@ -186,19 +177,19 @@ namespace Vant.Resources
 
         public void ClearPool()
         {
-             foreach (var kvp in _pools)
-             {
-                 while(kvp.Value.Count > 0)
-                 {
-                     var go = kvp.Value.Pop();
-                     if(go != null)
-                     {
-                         // 需要正确释放实例以减少引用计数
-                         ReleaseInstance(go);
-                     }
-                 }
-             }
-             _pools.Clear();
+            foreach (var kvp in _pools)
+            {
+                while (kvp.Value.Count > 0)
+                {
+                    var go = kvp.Value.Pop();
+                    if (go != null)
+                    {
+                        // 需要正确释放实例以减少引用计数
+                        ReleaseInstance(go);
+                    }
+                }
+            }
+            _pools.Clear();
         }
     }
 

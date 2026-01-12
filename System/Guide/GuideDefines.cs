@@ -3,13 +3,9 @@ namespace Vant.System.Guide
     /// <summary>
     /// 引导事件定义
     /// </summary>
-    public enum GuideEvent
+    public enum GuideInternalEvent
     {
-        Start,
-        StepStart,
-        StepComplete,
-        Complete,
-        Interrupt
+        TryStartGuide
     }
 
     /// <summary>

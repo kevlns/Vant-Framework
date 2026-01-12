@@ -13,13 +13,13 @@ namespace Vant.Core
 {
     public interface IGameLifeCycle
     {
-        event Action<float, float> OnUpdate;
-        event Action<float, float> OnLateUpdate;
-        event Action<float> OnFixedUpdate;
-        event Action<bool> OnApplicationFocusChanged;
-        event Action<bool> OnApplicationPauseChanged;
-        event Action OnApplicationQuitRequest;
-        event Action OnDestroyed;
+        event Action<float, float> OnUpdateEvent;
+        event Action<float, float> OnLateUpdateEvent;
+        event Action<float> OnFixedUpdateEvent;
+        event Action<bool> OnApplicationFocusEvent;
+        event Action<bool> OnApplicationPauseEvent;
+        event Action OnApplicationQuitEvent;
+        event Action OnDestroyEvent;
     }
 
     /// <summary>
@@ -102,6 +102,7 @@ namespace Vant.Core
         public TaskManager TaskManager { get; private set; }
 
         private IGameLifeCycle _gameLifeCycle;
+        public IGameLifeCycle GameLifeCycle => _gameLifeCycle;
 
         public AppCore(IGameLifeCycle gameLifeCycle)
         {
@@ -109,17 +110,16 @@ namespace Vant.Core
             _gameLifeCycle = gameLifeCycle;
 
             // 1. 初始化基础服务
+            ConfigManager = new ConfigManager();
             Notifier = new Notifier();
             GMManager = new GMManager();
-            GuideManager = GuideManager.Instance;
-            GuideManager.Initialize();
+            GuideManager = new GuideManager(this);
 
             // 2. 初始化资源管理器 (Addressables 为主，Resources 为辅)
             MainAssetManager = new AddressablesManager();
             FallbackAssetManager = new ResourcesAssetManager();
 
             // 3. 初始化业务模块并注入依赖
-            ConfigManager = new ConfigManager();
             ModelManager = new ModelManager(this);
 
             // 4. 初始化 UI 管理器，注入依赖
@@ -133,55 +133,6 @@ namespace Vant.Core
 
             // 7. 初始化任务管理器
             TaskManager = new TaskManager(this);
-
-            GameLifeCycleSubscribe();
-        }
-
-        private void GameLifeCycleSubscribe()
-        {
-            if (_gameLifeCycle != null)
-            {
-                _gameLifeCycle.OnUpdate += OnUpdate;
-                _gameLifeCycle.OnLateUpdate += OnLateUpdate;
-                _gameLifeCycle.OnFixedUpdate += OnFixedUpdate;
-                _gameLifeCycle.OnApplicationFocusChanged += OnApplicationFocusChanged;
-                _gameLifeCycle.OnApplicationPauseChanged += OnApplicationPauseChanged;
-                _gameLifeCycle.OnApplicationQuitRequest += OnApplicationQuitRequest;
-                _gameLifeCycle.OnDestroyed += OnDestroyed;
-            }
-        }
-
-        private void OnUpdate(float deltaTime, float unscaledDeltaTime)
-        {
-            ProcedureManager.OnUpdate(deltaTime, unscaledDeltaTime);
-            NetManager.OnUpdate(deltaTime, unscaledDeltaTime);
-            GuideManager.Update(deltaTime);
-        }
-
-        private void OnLateUpdate(float deltaTime, float unscaledDeltaTime)
-        {
-        }
-
-        private void OnFixedUpdate(float fixedDeltaTime)
-        {
-        }
-
-        private void OnApplicationFocusChanged(bool hasFocus)
-        {
-        }
-
-        private void OnApplicationPauseChanged(bool pauseStatus)
-        {
-        }
-
-        private void OnApplicationQuitRequest()
-        {
-            NetManager.OnApplicationQuit();
-        }
-
-        private void OnDestroyed()
-        {
-            NetManager.OnDestroy();
         }
     }
 }

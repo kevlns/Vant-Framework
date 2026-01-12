@@ -1,4 +1,7 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Reflection;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using Vant.Core;
@@ -10,157 +13,109 @@ namespace Vant.System.Guide
     /// </summary>
     public class GuideManager
     {
-        private static GuideManager _instance;
-        public static GuideManager Instance => _instance ??= new GuideManager();
+        public static GuideManager Instance { get; private set; }
 
-        private AppCore AppCore => AppCore.Instance;
-
-        // 当前正在进行的引导 ID
-        public int CurrentGuideId { get; private set; } = 0;
+        private AppCore _appCore;
 
         // 当前正在进行的步骤
-        private AbstractGuideStep _currentStep;
-        
-        // 引导配置 (GuideId -> List<Step>)
-        // 实际项目中通常会从配置表读取，这里仅作演示容器
-        private Dictionary<int, List<AbstractGuideStep>> _guideConfigs = new Dictionary<int, List<AbstractGuideStep>>();
+        private GuideStepBase _currentStep;
 
-        // 步骤索引
-        private int _currentStepIndex = -1;
+        // 存储所有步骤处理器的实例 (StepType -> Instance)
+        private readonly Dictionary<string, GuideStepBase> _stepProcessors = new Dictionary<string, GuideStepBase>();
 
-        public void Initialize()
+        public GuideManager(AppCore appCore)
         {
-            // 初始化逻辑，例如加载配置
-            Debug.Log("[GuideManager] Initialized");
+            Instance = this;
+            _appCore = appCore;
+            InitializeStepProcessors();
+
+            _appCore.Notifier.AddListener(GuideInternalEvent.TryStartGuide, OnTryStartGuide);
         }
 
-        public void Update(float deltaTime)
+        private void InitializeStepProcessors()
         {
-            if (_currentStep != null && !_currentStep.IsCompleted)
-            {
-                _currentStep.Update(deltaTime);
-            }
-        }
+            _stepProcessors.Clear();
+            var targetType = typeof(GuideStepBase);
 
-        /// <summary>
-        /// 注册引导配置 (通常由配置表加载器调用)
-        /// </summary>
-        public void RegisterGuide(int guideId, List<AbstractGuideStep> steps)
-        {
-            if (_guideConfigs.ContainsKey(guideId))
+            // 获取当前域中所有程序集
+            var assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            foreach (var assembly in assemblies)
             {
-                _guideConfigs[guideId] = steps;
-            }
-            else
-            {
-                _guideConfigs.Add(guideId, steps);
-            }
-        }
+                // 简单的过滤，根据需要可以调整过滤规则
+                if (assembly.IsDynamic ||
+                    assembly.FullName.StartsWith("Unity") ||
+                    assembly.FullName.StartsWith("System") ||
+                    assembly.FullName.StartsWith("mscorlib"))
+                    continue;
 
-        /// <summary>
-        /// 开始引导
-        /// </summary>
-        public async void StartGuide(int guideId)
-        {
-            if (!_guideConfigs.ContainsKey(guideId))
-            {
-                Debug.LogError($"[GuideManager] Guide {guideId} not found!");
-                return;
+                Type[] types;
+                try
+                {
+                    types = assembly.GetTypes();
+                }
+                catch (ReflectionTypeLoadException ex)
+                {
+                    types = ex.Types.Where(t => t != null).ToArray();
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+
+                foreach (var type in types)
+                {
+                    if (type.IsClass && !type.IsAbstract && type.IsSubclassOf(targetType))
+                    {
+                        try
+                        {
+                            // 创建实例
+                            if (Activator.CreateInstance(type) is GuideStepBase stepInstance)
+                            {
+                                // 过滤掉 Type 为 None 的
+                                if (stepInstance.StepType != GuideStepType.None)
+                                {
+                                    if (!_stepProcessors.ContainsKey(stepInstance.StepType))
+                                    {
+                                        _stepProcessors.Add(stepInstance.StepType, stepInstance);
+                                    }
+                                    else
+                                    {
+                                        Debug.LogError($"[GuideManager] Duplicate StepType: {stepInstance.StepType}. Class: {type.Name}, Existing: {_stepProcessors[stepInstance.StepType].GetType().Name}");
+                                    }
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            Debug.LogError($"[GuideManager] Failed to create instance of {type.Name}: {ex}");
+                        }
+                    }
+                }
             }
-
-            // 如果有正在进行的引导，先强制结束
-            if (CurrentGuideId != -1)
-            {
-                await StopGuide();
-            }
-
-            CurrentGuideId = guideId;
-            _currentStepIndex = -1;
-            
-            Debug.Log($"[GuideManager] Start Guide: {guideId}");
-            
-            // 开始第一步
-            await NextStep();
-        }
-
-        /// <summary>
-        /// 停止当前引导
-        /// </summary>
-        public async UniTask StopGuide()
-        {
-            if (_currentStep != null)
-            {
-                await _currentStep.Exit();
-                _currentStep = null;
-            }
-
-            CurrentGuideId = -1;
-            _currentStepIndex = -1;
-            Debug.Log("[GuideManager] Guide Stopped");
         }
 
         /// <summary>
-        /// 执行下一步
+        /// 获取指定类型的步骤处理器实例
         /// </summary>
-        public async UniTask NextStep()
+        public GuideStepBase GetStepProcessor(string stepType)
         {
-            // 退出上一步
-            if (_currentStep != null)
+            if (_stepProcessors.TryGetValue(stepType, out var processor))
             {
-                await _currentStep.Exit();
-                _currentStep = null;
+                return processor;
             }
-
-            if (CurrentGuideId == -1 || !_guideConfigs.ContainsKey(CurrentGuideId))
-                return;
-
-            var steps = _guideConfigs[CurrentGuideId];
-            _currentStepIndex++;
-
-            // 检查是否所有步骤已完成
-            if (_currentStepIndex >= steps.Count)
-            {
-                await CompleteGuide();
-                return;
-            }
-
-            // 进入下一步
-            _currentStep = steps[_currentStepIndex];
-            _currentStep.StepId = _currentStepIndex;
-            _currentStep.GuideId = CurrentGuideId;
-            
-            Debug.Log($"[GuideManager] Enter Step: {_currentStepIndex} (Type: {_currentStep.GetType().Name})");
-            await _currentStep.Enter();
+            return null;
         }
 
-        /// <summary>
-        /// 完成整个引导
-        /// </summary>
-        private async UniTask CompleteGuide()
+        public void OnTryStartGuide(object data)
         {
-            Debug.Log($"[GuideManager] Guide {CurrentGuideId} Completed!");
-            CurrentGuideId = -1;
-            _currentStep = null;
-            await UniTask.CompletedTask;
-            
-            // 这里可以发送引导完成的事件
-            // AppCore.EventManager.Trigger(GuideEvent.GuideFinished, ...);
-        }
-
-        /// <summary>
-        /// 外部触发完成当前步骤 (例如点击了某个按钮)
-        /// </summary>
-        public async void CompleteCurrentStep()
-        {
-            if (_currentStep != null && !_currentStep.IsCompleted)
-            {
-                // 标记步骤内部完成逻辑
-                // 注意：AbstractGuideStep.Complete 是 protected，
-                // 实际逻辑中可能是 Step 监听事件自己调用 Complete，
-                // 或者 Manager 强制切换。
-                // 这里我们假设 Manager 控制流转，直接进入下一步
-                await NextStep();
-            }
+            // if (_guideConfigs.TryGetValue(guideId, out var steps))
+            // {
+            //     _ = PlayGuideStepsAsync(steps);
+            // }
+            // else
+            // {
+            //     Debug.LogWarning($"GuideManager: No guide config found for GuideId {guideId}");
+            // }
         }
     }
 }

@@ -123,8 +123,8 @@ namespace Vant.UI.UIFramework
             _uiRoot = uiRoot;
 
             // 注册事件监听
-            _appCore.Notifier.AddListener<string, object>(UICommonEvent.OPEN_UI, OnOpenUIEvent);
-            _appCore.Notifier.AddListener<string>(UICommonEvent.CLOSE_UI, OnCloseUIEvent);
+            _appCore.Notifier.AddListener<string, object>(UIInternalEvent.OPEN_UI, OnOpenUIEvent);
+            _appCore.Notifier.AddListener<string>(UIInternalEvent.CLOSE_UI, OnCloseUIEvent);
 
             // 初始化层级
             _layerRoots = new Dictionary<UILayer, Transform>();

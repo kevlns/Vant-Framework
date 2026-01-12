@@ -83,7 +83,7 @@ namespace Vant.MVC
             // 4. 打开后处理
             await OnAfterOpen();
 
-            appCore.Notifier.Dispatch(UICommonEvent.UI_OPENED, Config.Name);
+            appCore.Notifier.Dispatch(UIInternalEvent.UI_OPENED, Config.Name);
         }
 
         internal async UniTask InternalClose()
@@ -102,7 +102,7 @@ namespace Vant.MVC
             }
 
             gameObject.SetActive(false);
-            appCore.Notifier.Dispatch(UICommonEvent.UI_CLOSED, Config.Name);
+            appCore.Notifier.Dispatch(UIInternalEvent.UI_CLOSED, Config.Name);
         }
 
         internal void InternalDestroy()

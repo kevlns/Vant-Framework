@@ -70,6 +70,14 @@ namespace Vant.System
             AddListener(eventType, callback, callback);
         }
 
+        /// <summary>
+        /// 接收单个 object 参数的通用接口
+        /// </summary>
+        public void AddListener(Enum eventType, Action<object> callback)
+        {
+            AddListener(eventType, callback, args => callback(GetArg<object>(args, 0)));
+        }
+
         public void AddListener<T>(Enum eventType, Action<T> callback)
         {
             AddListener(eventType, callback, args => callback(GetArg<T>(args, 0)));
@@ -117,6 +125,8 @@ namespace Vant.System
         #region RemoveListener (移除)
 
         public void RemoveListener(Enum eventType, Action callback) => RemoveListenerInternal(eventType, callback);
+        public void RemoveListener(Enum eventType, Action<object[]> callback) => RemoveListenerInternal(eventType, callback);
+        public void RemoveListener(Enum eventType, Action<object> callback) => RemoveListenerInternal(eventType, callback);
         public void RemoveListener<T>(Enum eventType, Action<T> callback) => RemoveListenerInternal(eventType, callback);
         public void RemoveListener<T1, T2>(Enum eventType, Action<T1, T2> callback) => RemoveListenerInternal(eventType, callback);
         public void RemoveListener<T1, T2, T3>(Enum eventType, Action<T1, T2, T3> callback) => RemoveListenerInternal(eventType, callback);

@@ -43,7 +43,7 @@ namespace Vant.UI.UIFramework
     /// <summary>
     /// UI 事件定义
     /// </summary>
-    public enum UICommonEvent
+    public enum UIInternalEvent
     {
         OPEN_UI,
         CLOSE_UI,

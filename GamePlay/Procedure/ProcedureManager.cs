@@ -11,11 +11,22 @@ namespace Vant.GamePlay.Procedure
     public class ProcedureManager
     {
         private IFsm<ProcedureManager> _fsm;
+
+        /// <summary>
+        /// 获取当前流程
+        /// </summary>
+        public ProcedureBase CurrentProcedure => _fsm?.CurrentState as ProcedureBase;
+
+        /// <summary>
+        /// 获取 AppCore 引用 (供流程状态使用)
+        /// </summary>
         private AppCore _appCore;
+        public AppCore AppCore => _appCore;
 
         public ProcedureManager(AppCore appCore)
         {
             _appCore = appCore;
+            _appCore.GameLifeCycle.OnUpdateEvent += OnUpdate;
         }
 
         /// <summary>
@@ -36,21 +47,24 @@ namespace Vant.GamePlay.Procedure
         }
 
         /// <summary>
-        /// 轮询流程
+        /// 是否是当前流程
         /// </summary>
-        public void OnUpdate(float elapseSeconds, float realElapseSeconds)
+        public bool IsCurrentProcedure<T>() where T : ProcedureBase
         {
-            _fsm?.Update(elapseSeconds, realElapseSeconds);
+            if (_fsm == null)
+            {
+                return false;
+            }
+
+            return _fsm.CurrentState is T;
         }
 
         /// <summary>
-        /// 获取当前流程
+        /// 轮询流程
         /// </summary>
-        public ProcedureBase CurrentProcedure => _fsm?.CurrentState as ProcedureBase;
-
-        /// <summary>
-        /// 获取 AppCore 引用 (供流程状态使用)
-        /// </summary>
-        public AppCore AppCore => _appCore;
+        private void OnUpdate(float elapseSeconds, float realElapseSeconds)
+        {
+            _fsm?.Update(elapseSeconds, realElapseSeconds);
+        }
     }
 }

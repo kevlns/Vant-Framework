@@ -24,6 +24,10 @@ namespace Vant.Net
         public NetManager(AppCore appCore)
         {
             _appCore = appCore;
+            _appCore.GameLifeCycle.OnUpdateEvent += OnUpdate;
+            _appCore.GameLifeCycle.OnApplicationQuitEvent += OnApplicationQuit;
+            _appCore.GameLifeCycle.OnDestroyEvent += OnDestroy;
+
             // 初始化 WebSocket
             WebSocketClient = new WebSocketClient();
             // 初始化 HTTP
