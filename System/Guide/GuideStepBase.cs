@@ -26,6 +26,7 @@ namespace Vant.System.Guide
         protected virtual UniTask OnRun() => UniTask.CompletedTask;
         protected virtual void OnUpdate(float deltaTime) { }
         protected virtual void OnDispose() { }
+        public virtual async UniTask Preload() { await UniTask.CompletedTask; }
 
         public async UniTask<string> Play(string stepId, object GuideStepData, CancellationTokenSource cancellationTokenSource = default)
         {
@@ -37,8 +38,6 @@ namespace Vant.System.Guide
 
             try
             {
-                await UniTask.Yield(cancellationToken: token);
-
                 bool isValid = await OnValidate();
                 if (!isValid)
                 {

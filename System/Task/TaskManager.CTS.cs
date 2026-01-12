@@ -49,13 +49,13 @@ namespace Vant.System
             PlayerLoopTiming timing = PlayerLoopTiming.Update,
             bool completeImmediately = false)
         {
-            if (_instance == null)
+            if (Instance == null)
             {
                 return UniTask.WaitUntilCanceled(cancellationToken, timing, completeImmediately);
             }
             else
             {
-                var cts = _instance.CreateLinkedCTS(cancellationToken);
+                var cts = Instance.CreateLinkedCTS(cancellationToken);
                 return AwaitAndDispose(UniTask.WaitUntilCanceled(cts.Token, timing, completeImmediately), cts);
             }
         }

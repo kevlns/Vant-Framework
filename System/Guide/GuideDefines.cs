@@ -5,6 +5,9 @@ namespace Vant.System.Guide
     /// </summary>
     public enum GuideInternalEvent
     {
+        EnableGuide,
+        DisableGuide,
+        UpdateFinishedGuideSteps,
         TryStartGuide
     }
 

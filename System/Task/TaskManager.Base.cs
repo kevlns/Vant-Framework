@@ -11,13 +11,13 @@ namespace Vant.System
     {
         private AppCore _appCore;
         private readonly object _gate = new object();
-        private static TaskManager _instance;
+        public static TaskManager Instance { get; private set; }
 
         public TaskManager(AppCore appCore)
         {
             _appCore = appCore;
             _defaultChain = new TaskChain(this, needFuse: false);
-            _instance = this;
+            Instance = this;
         }
 
         /// <summary>
@@ -33,10 +33,10 @@ namespace Vant.System
             }
 
             // Cancel 会触发旧 token 的所有注册回调
-            try { old.Cancel(); }
+            try { old?.Cancel(); }
             finally
             {
-                old.Dispose();
+                old?.Dispose();
                 _defaultChain.ResetCTS();
             }
         }

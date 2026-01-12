@@ -113,7 +113,6 @@ namespace Vant.Core
             ConfigManager = new ConfigManager();
             Notifier = new Notifier();
             GMManager = new GMManager();
-            GuideManager = new GuideManager(this);
 
             // 2. 初始化资源管理器 (Addressables 为主，Resources 为辅)
             MainAssetManager = new AddressablesManager();
@@ -133,6 +132,9 @@ namespace Vant.Core
 
             // 7. 初始化任务管理器
             TaskManager = new TaskManager(this);
+
+            // 8. 初始化引导管理器
+            GuideManager = new GuideManager(this);
         }
     }
 }
