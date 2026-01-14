@@ -42,15 +42,17 @@ namespace Vant.System.Guide
 
         #region 事件及代理
 
-        // 外部注入的事件，用于获取当前满足条件的引导列表
-        public event Func<List<object>> GetValidGuidesEvent;
-
-        // 外部注入的事件，用于对满足条件的引导列表进行排序 (返回排序后的列表)
-        public event Func<List<object>, List<object>> SortValidGuidesEvent;
-
-        // 外部注入的数据提取器，用于从引导数据中提取所需的固定字段 StepId 和 StepType
-        public Func<object, string> StepIdExtractor { get; set; }
-        public Func<object, string> StepTypeExtractor { get; set; }
+        private DataExtractors _dataCore;
+        public class DataExtractors
+        {
+            public Func<List<object>> GetValidGuideGroups;  // 获取满足条件的引导组列表
+            public Func<object, List<object>> GetGuideGroupSteps;  // 获取指定引导组的所有步骤列表
+            public Func<List<object>, List<object>> SortGuideGroups; // 对引导组进行自定义排序，如果不传入则按默认顺序
+            public Func<List<object>, List<object>> SortGuideSteps; // 对引导步骤进行自定义排序
+            public Func<object, string> GroupIdExtractor { get; set; }  // 组id提取器
+            public Func<object, string> StepIdExtractor { get; set; }  // 步骤id提取器
+            public Func<object, string> StepTypeExtractor { get; set; }  // 步骤类型提取器
+        }
 
         #endregion
 
@@ -59,16 +61,17 @@ namespace Vant.System.Guide
         {
             Instance = this;
             _appCore = appCore;
-            _groupCTS?.Dispose();
-            _groupCTS = TaskManager.Instance.CreateLinkedCTS();
-            _stepCTS?.Dispose();
-            _stepCTS = TaskManager.Instance.CreateLinkedCTS(_groupCTS.Token);
             InitializeStepProcessors();
 
             _appCore.Notifier.AddListener(GuideInternalEvent.EnableGuide, OnEnableGuide);
             _appCore.Notifier.AddListener(GuideInternalEvent.DisableGuide, OnDisableGuide);
             _appCore.Notifier.AddListener(GuideInternalEvent.UpdateFinishedGuideSteps, OnUpdateFinishedGuideSteps);
             _appCore.Notifier.AddListener(GuideInternalEvent.TryStartGuide, OnTryStartGuide);
+        }
+
+        public void SetupExtractors(DataExtractors dataExtractors)
+        {
+            _dataCore = dataExtractors;
         }
 
         private void InitializeStepProcessors()
@@ -169,60 +172,21 @@ namespace Vant.System.Guide
 
         public void OnTryStartGuide(object data)
         {
-            if (!_isGuideEnable) return;
+            if (!_isGuideEnable || _dataCore == null) return;
             InternalTryStartGuide();
         }
 
         private async void InternalTryStartGuide()
         {
-            if (StepIdExtractor == null || StepTypeExtractor == null)
-            {
-                Debug.LogError("[GuideManager] Extractors not set! Cannot parse guide data.");
-                return;
-            }
-
             ConditionContext.UpdateContext();
-            var guideSteps = GetValidGuidesEvent?.Invoke();
-            if (guideSteps == null || guideSteps.Count == 0) return;
-            guideSteps = SortValidGuidesEvent?.Invoke(guideSteps) ?? guideSteps;
+            var validGroups = _dataCore.GetValidGuideGroups?.Invoke();
+            if (validGroups == null || validGroups.Count == 0) return;
+            validGroups = _dataCore.SortGuideGroups?.Invoke(validGroups) ?? validGroups;
 
-            // 只启动优先级最高的第一个引导
-            var topGuideData = guideSteps[0];
-            string stepId = StepIdExtractor(topGuideData);
-            string stepType = StepTypeExtractor(topGuideData);
+            var topGroup = validGroups[0];
+            var steps = _dataCore.GetGuideGroupSteps?.Invoke(topGroup);
 
-            // 检查是否是重复引导或者当前已有引导在进行中
-            if (FinishedGuideSteps.Contains(stepId) || _currentStep != null || _currentStep.StepId == stepId) return;
-
-            var processor = GetStepProcessor(stepType);
-            if (processor == null)
-            {
-                Debug.LogError($"[GuideManager] No processor found for Type: {stepType} (ID: {stepId})");
-                return;
-            }
-
-            try
-            {
-                _currentStep = processor;
-                await processor.Preload();
-                string result = await processor.Play(stepId, topGuideData, _stepCTS);
-            }
-            catch (OperationCanceledException ex)
-            {
-                
-            }
-            catch (Exception ex)
-            {
-                Debug.LogError($"[GuideManager] Step Error: {ex}");
-            }
-            finally
-            {
-                if (_currentStep == processor)
-                {
-                    _currentStep = null;
-                }
-                DisposeCTS();
-            }
+            // TODO 剩余的处理逻辑
         }
 
         public void StopCurrentGuide()
