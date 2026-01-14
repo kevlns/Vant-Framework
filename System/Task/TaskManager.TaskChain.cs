@@ -18,5 +18,10 @@ namespace Vant.System
         {
             _defaultChain.EnqueueAsync(work);
         }
+
+        public TaskChain CreateChain(bool needFuse = false)
+        {
+            return new TaskChain(this, needFuse);
+        }
     }
 }

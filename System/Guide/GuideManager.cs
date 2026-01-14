@@ -24,6 +24,7 @@ namespace Vant.System.Guide
         private bool _isGuideEnable = false;
 
         // 当前正在进行的步骤
+        private string _currentGroupId;
         private GuideStepBase _currentStep;
 
         // 已完成的引导步骤 ID 集合，防止重复引导
@@ -31,6 +32,7 @@ namespace Vant.System.Guide
 
         // 存储所有步骤处理器的实例 (StepType -> Instance)
         private readonly Dictionary<string, GuideStepBase> _stepProcessors = new Dictionary<string, GuideStepBase>();
+        private TaskChain _guideTaskChain;
 
         #region CTS 定义
 
@@ -61,6 +63,7 @@ namespace Vant.System.Guide
         {
             Instance = this;
             _appCore = appCore;
+            _guideTaskChain = TaskManager.Instance.CreateChain(needFuse: true);
             InitializeStepProcessors();
 
             _appCore.Notifier.AddListener(GuideInternalEvent.EnableGuide, OnEnableGuide);
@@ -172,7 +175,24 @@ namespace Vant.System.Guide
 
         public void OnTryStartGuide(object data)
         {
-            if (!_isGuideEnable || _dataCore == null) return;
+            if (!_isGuideEnable)
+            {
+                Debug.Log("[GuideManager] Guide system is disabled.");
+                return;
+            }
+
+            if (_dataCore == null)
+            {
+                Debug.LogError("[GuideManager] Data extractors for getting guide groups or steps are not set.");
+                return;
+            }
+
+            if (_currentStep != null)
+            {
+                Debug.Log("[GuideManager] A guide step is already in progress.");
+                return;
+            }
+
             InternalTryStartGuide();
         }
 
@@ -183,10 +203,64 @@ namespace Vant.System.Guide
             if (validGroups == null || validGroups.Count == 0) return;
             validGroups = _dataCore.SortGuideGroups?.Invoke(validGroups) ?? validGroups;
 
-            var topGroup = validGroups[0];
-            var steps = _dataCore.GetGuideGroupSteps?.Invoke(topGroup);
+            var topGroupData = validGroups[0];
+            var steps = _dataCore.GetGuideGroupSteps?.Invoke(topGroupData);
+            steps = _dataCore.SortGuideSteps?.Invoke(steps) ?? steps;
 
-            // TODO 剩余的处理逻辑
+            _stepCTS?.Dispose();
+            _groupCTS?.Dispose();
+            _groupCTS = TaskManager.Instance.CreateLinkedCTS();
+            _stepCTS = TaskManager.Instance.CreateLinkedCTS(_groupCTS.Token);
+            try
+            {
+                foreach (var stepData in steps)
+                {
+                    _guideTaskChain.EnqueueAsync(() => GuideTask(topGroupData, stepData, _stepCTS.Token));
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                Debug.Log("[GuideManager] Guide group execution was canceled.");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[GuideManager] Exception during guide group execution: {ex}");
+            }
+            finally
+            {
+            }
+        }
+
+        private async UniTask GuideTask(object groupData, object stepData, CancellationToken token)
+        {
+            _currentGroupId = _dataCore.GroupIdExtractor?.Invoke(groupData);
+            var stepId = _dataCore.StepIdExtractor?.Invoke(stepData);
+            if (_currentGroupId == null || stepId == null)
+            {
+                _currentGroupId = null;
+                _currentStep = null;
+                Debug.LogError("[GuideManager] GroupId or StepId is null.");
+                return;
+            }
+
+            var stepType = _dataCore.StepTypeExtractor?.Invoke(stepData);
+            _currentStep = GetStepProcessor(stepType);
+            if (_currentStep == null)
+            {
+                _currentGroupId = null;
+                _currentStep = null;
+                Debug.LogError($"[GuideManager] No step processor found for StepType: {stepType}, StepId: {stepId}");
+                return;
+            }
+
+            try
+            {
+                // TODO 任务执行
+            }
+            catch (Exception ex)
+            {
+                Debug.LogError($"[GuideManager] Exception during Preload of StepId: {stepId}, Exception: {ex}");
+            }
         }
 
         public void StopCurrentGuide()
@@ -201,11 +275,10 @@ namespace Vant.System.Guide
 
         private void DisposeCTS()
         {
-            if (_stepCTS != null)
-            {
-                _stepCTS.Dispose();
-                _stepCTS = null;
-            }
+            _stepCTS?.Dispose();
+            _stepCTS = null;
+            _groupCTS?.Dispose();
+            _groupCTS = null;
         }
     }
 }
