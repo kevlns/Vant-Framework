@@ -9,7 +9,8 @@
         "DOTween.Modules",
         "UniTask.Addressables",
         "UniTask.DOTween",
-        "Luban.Runtime"
+        "Luban.Runtime",
+        "YooAsset"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
