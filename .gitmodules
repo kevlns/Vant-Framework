@@ -4,6 +4,3 @@
 [submodule "Dependency/NativeWebSocket"]
 	path = Dependency/NativeWebSocket
 	url = https://github.com/endel/NativeWebSocket.git
-[submodule "Dependency/UniTask"]
-	path = Dependency/UniTask
-	url = https://github.com/Cysharp/UniTask.git
