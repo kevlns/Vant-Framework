@@ -104,7 +104,7 @@ namespace Vant.Core
         private IGameLifeCycle _gameLifeCycle;
         public IGameLifeCycle GameLifeCycle => _gameLifeCycle;
 
-        public AppCore(IGameLifeCycle gameLifeCycle)
+        public AppCore(IGameLifeCycle gameLifeCycle, IAssetManager mainAssetManager = null, IAssetManager fallbackAssetManager = null)
         {
             Instance = this;
             _gameLifeCycle = gameLifeCycle;
@@ -115,8 +115,8 @@ namespace Vant.Core
             GMManager = new GMManager();
 
             // 2. 初始化资源管理器 (Addressables 为主，Resources 为辅)
-            MainAssetManager = new AddressablesManager();
-            FallbackAssetManager = new ResourcesAssetManager();
+            MainAssetManager = mainAssetManager ?? new AddressablesManager();
+            FallbackAssetManager = fallbackAssetManager ?? new ResourcesAssetManager();
 
             // 3. 初始化业务模块并注入依赖
             ModelManager = new ModelManager(this);
