@@ -1,6 +1,3 @@
 [submodule "Dependency/luban_unity"]
 	path = Dependency/luban_unity
 	url = https://github.com/focus-creative-games/luban_unity.git
-[submodule "Dependency/NativeWebSocket"]
-	path = Dependency/NativeWebSocket
-	url = https://github.com/endel/NativeWebSocket.git
