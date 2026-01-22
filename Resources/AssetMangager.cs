@@ -1,11 +1,7 @@
-using System;
 using System.Collections.Generic;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
-using UnityEngine.AddressableAssets;
-using UnityEngine.ResourceManagement.AsyncOperations;
 using Object = UnityEngine.Object;
-using YooAsset;
 
 namespace Vant.Resources
 {
@@ -72,7 +68,13 @@ namespace Vant.Resources
     /// </summary>
     public abstract class AssetManagerBase : IAssetManager
     {
-        protected readonly Dictionary<int, string> _instancePathMap = new Dictionary<int, string>();
+        protected struct AssetRef
+        {
+            public string Path;
+            public string PackageName;
+        }
+
+        protected readonly Dictionary<int, AssetRef> _instancePathMap = new Dictionary<int, AssetRef>();
         protected readonly Dictionary<string, Stack<GameObject>> _pools = new Dictionary<string, Stack<GameObject>>();
         protected Transform _poolRoot;
 
@@ -117,7 +119,7 @@ namespace Vant.Resources
             {
                 instance = Object.Instantiate(prefab);
             }
-            _instancePathMap[instance.GetInstanceID()] = path; // 这里可能需要扩展 _instancePathMap 来存储 packageName，以便 ReleaseInstance 时能正确 ReleaseAsset
+            _instancePathMap[instance.GetInstanceID()] = new AssetRef { Path = path, PackageName = packageName };
             return instance;
         }
 
@@ -126,12 +128,9 @@ namespace Vant.Resources
             if (instance == null) return;
 
             int id = instance.GetInstanceID();
-            if (_instancePathMap.TryGetValue(id, out string path))
+            if (_instancePathMap.TryGetValue(id, out AssetRef refData))
             {
-                // 注意：目前的 ReleaseInstance 接口无法感知 packageName。
-                // 如果需要支持多包卸载，_instancePathMap 需要存储更多信息，或者 ReleaseAsset 实现能够自动处理。
-                // 对于 YooAsset，ReleaseAsset 通常可以遍历所有包，或者根据 Handle 自动释放。
-                ReleaseAsset(path);
+                ReleaseAsset(refData.Path, refData.PackageName);
                 _instancePathMap.Remove(id);
             }
             Object.Destroy(instance);
@@ -161,17 +160,17 @@ namespace Vant.Resources
             if (instance == null) return;
 
             int id = instance.GetInstanceID();
-            if (!_instancePathMap.TryGetValue(id, out string path))
+            if (!_instancePathMap.TryGetValue(id, out AssetRef refData))
             {
                 Debug.LogWarning($"[AssetManager] Despawn failed: Instance {instance.name} not managed by AssetManager.");
                 Object.Destroy(instance);
                 return;
             }
 
-            if (!_pools.TryGetValue(path, out var stack))
+            if (!_pools.TryGetValue(refData.Path, out var stack))
             {
                 stack = new Stack<GameObject>();
-                _pools[path] = stack;
+                _pools[refData.Path] = stack;
             }
 
             instance.SetActive(false);
@@ -194,409 +193,6 @@ namespace Vant.Resources
                 }
             }
             _pools.Clear();
-        }
-    }
-
-    /// <summary>
-    /// 基于 Resources 的资源管理器
-    /// 适用于：开发阶段、小型项目、必须放在 Resources 目录下的配置/预制体
-    /// </summary>
-    public class ResourcesAssetManager : AssetManagerBase
-    {
-        private class AssetInfo
-        {
-            public Object Asset;
-            public int RefCount;
-            public UniTaskCompletionSource<Object> LoadingTcs;
-            public bool ReleaseWhenLoaded;
-        }
-
-        private readonly Dictionary<string, AssetInfo> _loadedAssets = new Dictionary<string, AssetInfo>();
-
-        public override async UniTask<T> LoadAssetAsync<T>(string path, string packageName = null)
-        {
-            if (_loadedAssets.TryGetValue(path, out var info))
-            {
-                info.RefCount++;
-
-                if (info.Asset != null)
-                {
-                    return info.Asset as T;
-                }
-
-                // 资源仍在加载中：等待同一个 in-flight 任务，避免重复 LoadAsync 导致重复 Add key 或引用计数错乱
-                if (info.LoadingTcs != null)
-                {
-                    var asset = await info.LoadingTcs.Task;
-                    return asset as T;
-                }
-
-                return null;
-            }
-
-            // 首次请求：创建占位条目，用于合并并发加载
-            var newInfo = new AssetInfo
-            {
-                Asset = null,
-                RefCount = 1,
-                LoadingTcs = new UniTaskCompletionSource<Object>(),
-                ReleaseWhenLoaded = false
-            };
-            _loadedAssets.Add(path, newInfo);
-
-            // UniTask 可以直接 await ResourceRequest
-            try
-            {
-                ResourceRequest request = UnityEngine.Resources.LoadAsync<T>(path);
-                await request;
-
-                if (request.asset == null)
-                {
-                    Debug.LogError($"[ResourcesAssetManager] Failed to load asset: {path}");
-                    _loadedAssets.Remove(path);
-                    newInfo.LoadingTcs.TrySetResult(null);
-                    return null;
-                }
-
-                newInfo.Asset = request.asset;
-                newInfo.LoadingTcs.TrySetResult(newInfo.Asset);
-                newInfo.LoadingTcs = null;
-
-                // 如果加载期间所有引用都释放了，则加载完成后立刻清理
-                if (newInfo.RefCount <= 0 || newInfo.ReleaseWhenLoaded)
-                {
-                    if (newInfo.Asset != null && !(newInfo.Asset is GameObject))
-                    {
-                        UnityEngine.Resources.UnloadAsset(newInfo.Asset);
-                    }
-                    _loadedAssets.Remove(path);
-                }
-
-                return newInfo.Asset as T;
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[ResourcesAssetManager] Exception loading asset {path}: {e.Message}");
-                _loadedAssets.Remove(path);
-                newInfo.LoadingTcs.TrySetResult(null);
-                return null;
-            }
-        }
-
-        public override void ReleaseAsset(string path, string packageName = null)
-        {
-            if (_loadedAssets.TryGetValue(path, out var info))
-            {
-                info.RefCount--;
-                if (info.RefCount <= 0)
-                {
-                    // 仍在加载：无法取消 Resources.LoadAsync，只能标记加载完后释放
-                    if (info.Asset == null)
-                    {
-                        info.RefCount = 0;
-                        info.ReleaseWhenLoaded = true;
-                        return;
-                    }
-
-                    // Resources.UnloadAsset 只能卸载非 GameObject 资源 (如 Texture, Mesh)
-                    // 对于 GameObject，通常依赖 Resources.UnloadUnusedAssets()
-                    // 这里我们只做简单的引用计数管理，真正的内存释放可能需要手动调用 UnloadUnusedAssets
-                    if (!(info.Asset is GameObject))
-                    {
-                        UnityEngine.Resources.UnloadAsset(info.Asset);
-                    }
-                    _loadedAssets.Remove(path);
-                    // 注意：Resources 模式下，GameObject 的卸载比较被动
-                }
-            }
-        }
-
-        public override void ClearUnused()
-        {
-            // 清理对象池中的对象，确保引用计数正确下降
-            ClearPool();
-
-            // 移除引用计数 <= 0 的资源
-            var toRemove = new List<string>();
-            foreach (var kvp in _loadedAssets)
-            {
-                var info = kvp.Value;
-                if (info == null) continue;
-
-                if (info.RefCount <= 0)
-                {
-                    // 正在加载中的资源不要直接移除：保留条目，加载完成后可正确 Unload
-                    if (info.Asset == null && info.LoadingTcs != null)
-                    {
-                        info.ReleaseWhenLoaded = true;
-                        continue;
-                    }
-
-                    toRemove.Add(kvp.Key);
-                }
-            }
-
-            foreach (var key in toRemove)
-            {
-                _loadedAssets.Remove(key);
-            }
-
-            UnityEngine.Resources.UnloadUnusedAssets();
-        }
-    }
-
-    /// <summary>
-    /// 基于 Addressables 的资源管理器
-    /// 适用于：生产环境、热更新资源、内存管理要求高的场景
-    /// </summary>
-    public class AddressablesManager : AssetManagerBase
-    {
-        private class HandleInfo
-        {
-            public AsyncOperationHandle Handle;
-            public int RefCount;
-        }
-
-        private readonly Dictionary<string, HandleInfo> _loadedHandles = new Dictionary<string, HandleInfo>();
-
-        public override async UniTask<T> LoadAssetAsync<T>(string key, string packageName = null)
-        {
-            if (_loadedHandles.TryGetValue(key, out var info))
-            {
-                info.RefCount++;
-                if (info.Handle.IsDone)
-                {
-                    return info.Handle.Result as T;
-                }
-                // UniTask 可以直接 await Handle
-                await info.Handle;
-                return info.Handle.Result as T;
-            }
-
-            // 开启新加载
-            var handle = Addressables.LoadAssetAsync<T>(key);
-            var newInfo = new HandleInfo { Handle = handle, RefCount = 1 };
-            _loadedHandles.Add(key, newInfo);
-
-            try
-            {
-                // UniTask 可以直接 await Handle
-                T result = await handle;
-                if (handle.Status == AsyncOperationStatus.Succeeded)
-                {
-                    return result;
-                }
-                else
-                {
-                    Debug.LogError($"[AddressablesManager] Failed to load asset: {key}");
-                    _loadedHandles.Remove(key);
-                    Addressables.Release(handle);
-                    return null;
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[AddressablesManager] Exception loading asset {key}: {e.Message}");
-                _loadedHandles.Remove(key);
-                // 异常情况下也要尝试释放 handle
-                Addressables.Release(handle);
-                return null;
-            }
-        }
-
-        public override void ReleaseAsset(string key, string packageName = null)
-        {
-            if (_loadedHandles.TryGetValue(key, out var info))
-            {
-                info.RefCount--;
-                if (info.RefCount <= 0)
-                {
-                    if (info.Handle.IsValid())
-                    {
-                        Addressables.Release(info.Handle);
-                    }
-                    _loadedHandles.Remove(key);
-                }
-            }
-        }
-
-        public override void ClearUnused()
-        {
-            // 清理对象池中的对象，确保引用计数正确下降
-            ClearPool();
-
-            // Addressables 的引用计数机制通常能自动处理，
-            // 这里可以用来强制清理那些 RefCount <= 0 但可能因为逻辑漏洞没被移除的 Handle
-            var toRemove = new List<string>();
-            foreach (var kvp in _loadedHandles)
-            {
-                if (kvp.Value.RefCount <= 0)
-                {
-                    toRemove.Add(kvp.Key);
-                }
-            }
-
-            foreach (var key in toRemove)
-            {
-                ReleaseAsset(key);
-            }
-        }
-    }
-
-    /// <summary>
-    /// 基于 YooAsset 的资源管理器
-    /// 适用于：使用 YooAsset 资源系统的场景，需确保 YooAsset 已预先初始化
-    /// </summary>
-    public class YooAssetManager : AssetManagerBase
-    {
-        private class HandleInfo
-        {
-            public AssetHandle Handle;
-            public int RefCount;
-        }
-
-        private readonly Dictionary<string, HandleInfo> _loadedHandles = new Dictionary<string, HandleInfo>();
-        private string _defaultPackageName;
-
-        /// <summary>
-        /// 构造函数
-        /// </summary>
-        /// <param name="packageName">YooAsset 默认包名，默认为 "DefaultPackage"</param>
-        public YooAssetManager(string defaultPackageName = "DefaultPackage")
-        {
-            _defaultPackageName = defaultPackageName;
-        }
-        
-        /// <summary>
-        /// 获取资源包，如果未指定包名则使用默认包
-        /// </summary>
-        private ResourcePackage GetPackage(string packageName)
-        {
-            if (string.IsNullOrEmpty(packageName))
-            {
-                packageName = _defaultPackageName;
-            }
-            
-            var package = YooAssets.TryGetPackage(packageName);
-            if (package == null)
-            {
-                Debug.LogWarning($"[YooAssetManager] Package '{packageName}' not found.");
-            }
-            return package;
-        }
-
-        public override async UniTask<T> LoadAssetAsync<T>(string location, string packageName = null)
-        {
-            var package = GetPackage(packageName);
-            if (package == null)
-            {
-                Debug.LogError("[YooAssetManager] Package is null!");
-                return null;
-            }
-
-            // 使用 location + packageName 作为唯一的 key
-            string cacheKey = string.IsNullOrEmpty(packageName) ? location : $"{packageName}/{location}";
-
-            if (_loadedHandles.TryGetValue(cacheKey, out var info))
-            {
-                info.RefCount++;
-                // 如果已加载完成或正在加载，Handle 对象是一样的
-                // 等待加载完成
-                if (!info.Handle.IsDone)
-                {
-                    await info.Handle.ToUniTask();
-                }
-
-                if (info.Handle.Status == EOperationStatus.Succeed)
-                {
-                    return info.Handle.AssetObject as T;
-                }
-                return null;
-            }
-
-            // 开启新加载
-            var handle = package.LoadAssetAsync<T>(location);
-            var newInfo = new HandleInfo { Handle = handle, RefCount = 1 };
-            _loadedHandles.Add(cacheKey, newInfo);
-
-            try
-            {
-                await handle.ToUniTask();
-
-                if (handle.Status == EOperationStatus.Succeed)
-                {
-                    return handle.AssetObject as T;
-                }
-                else
-                {
-                    Debug.LogError($"[YooAssetManager] Failed to load asset: {location}, Error: {handle.LastError}");
-                    handle.Release();
-                    _loadedHandles.Remove(cacheKey);
-                    return null;
-                }
-            }
-            catch (Exception e)
-            {
-                Debug.LogError($"[YooAssetManager] Exception loading asset {location}: {e.Message}");
-                if (_loadedHandles.ContainsKey(cacheKey))
-                {
-                    handle.Release();
-                    _loadedHandles.Remove(cacheKey);
-                }
-                return null;
-            }
-        }
-
-        public override void ReleaseAsset(string location, string packageName = null)
-        {
-            string cacheKey = string.IsNullOrEmpty(packageName) ? location : $"{packageName}/{location}";
-
-            if (_loadedHandles.TryGetValue(cacheKey, out var info))
-            {
-                info.RefCount--;
-                if (info.RefCount <= 0)
-                {
-                    info.Handle.Release();
-                    _loadedHandles.Remove(cacheKey);
-                }
-            }
-        }
-
-        public override void ClearUnused()
-        {
-            // 清理对象池中的对象，确保引用计数正确下降
-            ClearPool();
-
-            var toRemove = new List<string>();
-            foreach (var kvp in _loadedHandles)
-            {
-                if (kvp.Value.RefCount <= 0)
-                {
-                    if (kvp.Value.Handle.IsValid)
-                    {
-                        kvp.Value.Handle.Release();
-                    }
-                    toRemove.Add(kvp.Key);
-                }
-            }
-
-            foreach (var key in toRemove)
-            {
-                _loadedHandles.Remove(key);
-            }
-            
-            // 注意：YooAsset 资源卸载通常是针对整个 Package 的 UnloadUnusedAssets
-            // 这里我们无法确定应该对哪个包执行 UnloadUnusedAssets，
-            // 简单起见，可以尝试对默认包或者遍历所有已知包进行清理。
-            // 真正的多包管理可能需要额外的维护列表。
-            if (!string.IsNullOrEmpty(_defaultPackageName))
-            {
-                var package = YooAssets.TryGetPackage(_defaultPackageName);
-                if (package != null)
-                {
-                    package.UnloadUnusedAssetsAsync();
-                }
-            }
         }
     }
 }
