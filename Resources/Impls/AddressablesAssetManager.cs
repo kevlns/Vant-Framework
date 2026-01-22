@@ -32,7 +32,7 @@ namespace Vant.Resources
                     return info.Handle.Result as T;
                 }
                 // UniTask 可以直接 await Handle
-                await info.Handle;
+                await AddressablesAsyncExtensions.ToUniTask(info.Handle);
                 return info.Handle.Result as T;
             }
 
@@ -44,7 +44,7 @@ namespace Vant.Resources
             try
             {
                 // UniTask 可以直接 await Handle
-                T result = await handle;
+                T result = await AddressablesAsyncExtensions.ToUniTask(handle);
                 if (handle.Status == AsyncOperationStatus.Succeeded)
                 {
                     return result;

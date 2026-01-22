@@ -57,7 +57,7 @@ namespace Vant.Resources
             try
             {
                 ResourceRequest request = UnityEngine.Resources.LoadAsync<T>(path);
-                await request;
+                await UnityAsyncExtensions.ToUniTask(request);
 
                 if (request.asset == null)
                 {

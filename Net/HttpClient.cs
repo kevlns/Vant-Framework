@@ -106,7 +106,7 @@ namespace Vant.Net.Http
                 // 3. 发送
                 try
                 {
-                    await webRequest.SendWebRequest();
+                    await UnityAsyncExtensions.ToUniTask(webRequest.SendWebRequest());
 
                     // 4. 处理结果
                     if (webRequest.result == UnityWebRequest.Result.Success)
