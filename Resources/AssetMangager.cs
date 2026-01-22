@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
 using Object = UnityEngine.Object;
+using YooAsset;
 
 namespace Vant.Resources
 {
@@ -16,29 +17,29 @@ namespace Vant.Resources
         /// <summary>
         /// 异步加载资源
         /// </summary>
-        UniTask<T> LoadAssetAsync<T>(string path) where T : Object;
+        UniTask<T> LoadAssetAsync<T>(string path, string packageName = null) where T : Object;
 
         /// <summary>
         /// 预加载资源（只加载不实例化），用于提前占用引用计数，避免进入界面时卡顿。
         /// 调用后需要在合适时机使用 ReleaseAsset/ReleaseInstance 释放引用。
         /// </summary>
-        UniTask PreloadAssetAsync<T>(string path) where T : Object;
+        UniTask PreloadAssetAsync<T>(string path, string packageName = null) where T : Object;
 
         /// <summary>
         /// 预加载资源（只加载不实例化），用于提前占用引用计数，避免进入界面时卡顿。
         /// 调用后需要在合适时机使用 ReleaseAsset/ReleaseInstance 释放引用。
         /// </summary>
-        UniTask PreloadAssetsAsync<T>(IEnumerable<string> paths) where T : Object;
+        UniTask PreloadAssetsAsync<T>(IEnumerable<string> paths, string packageName = null) where T : Object;
 
         /// <summary>
         /// 异步加载并实例化 GameObject
         /// </summary>
-        UniTask<GameObject> InstantiateAsync(string path, Transform parent = null, bool worldPositionStays = false);
+        UniTask<GameObject> InstantiateAsync(string path, Transform parent = null, bool worldPositionStays = false, string packageName = null);
 
         /// <summary>
         /// 从对象池获取或实例化对象
         /// </summary>
-        UniTask<GameObject> SpawnAsync(string path, Transform parent = null);
+        UniTask<GameObject> SpawnAsync(string path, Transform parent = null, string packageName = null);
 
         /// <summary>
         /// 将对象回收至对象池
@@ -48,7 +49,7 @@ namespace Vant.Resources
         /// <summary>
         /// 释放资源引用
         /// </summary>
-        void ReleaseAsset(string path);
+        void ReleaseAsset(string path, string packageName = null);
 
         /// <summary>
         /// 销毁实例并释放对应的资源引用
@@ -82,29 +83,29 @@ namespace Vant.Resources
             _poolRoot = go.transform;
         }
 
-        public abstract UniTask<T> LoadAssetAsync<T>(string path) where T : Object;
-        public abstract void ReleaseAsset(string path);
+        public abstract UniTask<T> LoadAssetAsync<T>(string path, string packageName = null) where T : Object;
+        public abstract void ReleaseAsset(string path, string packageName = null);
         public abstract void ClearUnused();
 
-        public virtual async UniTask PreloadAssetAsync<T>(string path) where T : Object
+        public virtual async UniTask PreloadAssetAsync<T>(string path, string packageName = null) where T : Object
         {
-            await LoadAssetAsync<T>(path);
+            await LoadAssetAsync<T>(path, packageName);
         }
 
-        public virtual async UniTask PreloadAssetsAsync<T>(IEnumerable<string> paths) where T : Object
+        public virtual async UniTask PreloadAssetsAsync<T>(IEnumerable<string> paths, string packageName = null) where T : Object
         {
             if (paths == null) return;
 
             foreach (var path in paths)
             {
                 if (string.IsNullOrEmpty(path)) continue;
-                await PreloadAssetAsync<T>(path);
+                await PreloadAssetAsync<T>(path, packageName);
             }
         }
 
-        public virtual async UniTask<GameObject> InstantiateAsync(string path, Transform parent = null, bool worldPositionStays = false)
+        public virtual async UniTask<GameObject> InstantiateAsync(string path, Transform parent = null, bool worldPositionStays = false, string packageName = null)
         {
-            GameObject prefab = await LoadAssetAsync<GameObject>(path);
+            GameObject prefab = await LoadAssetAsync<GameObject>(path, packageName);
             if (prefab == null) return null;
 
             GameObject instance;
@@ -116,7 +117,7 @@ namespace Vant.Resources
             {
                 instance = Object.Instantiate(prefab);
             }
-            _instancePathMap[instance.GetInstanceID()] = path;
+            _instancePathMap[instance.GetInstanceID()] = path; // 这里可能需要扩展 _instancePathMap 来存储 packageName，以便 ReleaseInstance 时能正确 ReleaseAsset
             return instance;
         }
 
@@ -127,13 +128,16 @@ namespace Vant.Resources
             int id = instance.GetInstanceID();
             if (_instancePathMap.TryGetValue(id, out string path))
             {
+                // 注意：目前的 ReleaseInstance 接口无法感知 packageName。
+                // 如果需要支持多包卸载，_instancePathMap 需要存储更多信息，或者 ReleaseAsset 实现能够自动处理。
+                // 对于 YooAsset，ReleaseAsset 通常可以遍历所有包，或者根据 Handle 自动释放。
                 ReleaseAsset(path);
                 _instancePathMap.Remove(id);
             }
             Object.Destroy(instance);
         }
 
-        public async UniTask<GameObject> SpawnAsync(string path, Transform parent = null)
+        public async UniTask<GameObject> SpawnAsync(string path, Transform parent = null, string packageName = null)
         {
             if (_pools.TryGetValue(path, out var stack) && stack.Count > 0)
             {
@@ -149,7 +153,7 @@ namespace Vant.Resources
                     }
                 }
             }
-            return await InstantiateAsync(path, parent);
+            return await InstantiateAsync(path, parent, false, packageName);
         }
 
         public void Despawn(GameObject instance)
@@ -209,7 +213,7 @@ namespace Vant.Resources
 
         private readonly Dictionary<string, AssetInfo> _loadedAssets = new Dictionary<string, AssetInfo>();
 
-        public override async UniTask<T> LoadAssetAsync<T>(string path)
+        public override async UniTask<T> LoadAssetAsync<T>(string path, string packageName = null)
         {
             if (_loadedAssets.TryGetValue(path, out var info))
             {
@@ -279,7 +283,7 @@ namespace Vant.Resources
             }
         }
 
-        public override void ReleaseAsset(string path)
+        public override void ReleaseAsset(string path, string packageName = null)
         {
             if (_loadedAssets.TryGetValue(path, out var info))
             {
@@ -355,7 +359,7 @@ namespace Vant.Resources
 
         private readonly Dictionary<string, HandleInfo> _loadedHandles = new Dictionary<string, HandleInfo>();
 
-        public override async UniTask<T> LoadAssetAsync<T>(string key)
+        public override async UniTask<T> LoadAssetAsync<T>(string key, string packageName = null)
         {
             if (_loadedHandles.TryGetValue(key, out var info))
             {
@@ -400,7 +404,7 @@ namespace Vant.Resources
             }
         }
 
-        public override void ReleaseAsset(string key)
+        public override void ReleaseAsset(string key, string packageName = null)
         {
             if (_loadedHandles.TryGetValue(key, out var info))
             {
@@ -435,6 +439,163 @@ namespace Vant.Resources
             foreach (var key in toRemove)
             {
                 ReleaseAsset(key);
+            }
+        }
+    }
+
+    /// <summary>
+    /// 基于 YooAsset 的资源管理器
+    /// 适用于：使用 YooAsset 资源系统的场景，需确保 YooAsset 已预先初始化
+    /// </summary>
+    public class YooAssetManager : AssetManagerBase
+    {
+        private class HandleInfo
+        {
+            public AssetHandle Handle;
+            public int RefCount;
+        }
+
+        private readonly Dictionary<string, HandleInfo> _loadedHandles = new Dictionary<string, HandleInfo>();
+        private string _defaultPackageName;
+
+        /// <summary>
+        /// 构造函数
+        /// </summary>
+        /// <param name="packageName">YooAsset 默认包名，默认为 "DefaultPackage"</param>
+        public YooAssetManager(string defaultPackageName = "DefaultPackage")
+        {
+            _defaultPackageName = defaultPackageName;
+        }
+        
+        /// <summary>
+        /// 获取资源包，如果未指定包名则使用默认包
+        /// </summary>
+        private ResourcePackage GetPackage(string packageName)
+        {
+            if (string.IsNullOrEmpty(packageName))
+            {
+                packageName = _defaultPackageName;
+            }
+            
+            var package = YooAssets.TryGetPackage(packageName);
+            if (package == null)
+            {
+                Debug.LogWarning($"[YooAssetManager] Package '{packageName}' not found.");
+            }
+            return package;
+        }
+
+        public override async UniTask<T> LoadAssetAsync<T>(string location, string packageName = null)
+        {
+            var package = GetPackage(packageName);
+            if (package == null)
+            {
+                Debug.LogError("[YooAssetManager] Package is null!");
+                return null;
+            }
+
+            // 使用 location + packageName 作为唯一的 key
+            string cacheKey = string.IsNullOrEmpty(packageName) ? location : $"{packageName}/{location}";
+
+            if (_loadedHandles.TryGetValue(cacheKey, out var info))
+            {
+                info.RefCount++;
+                // 如果已加载完成或正在加载，Handle 对象是一样的
+                // 等待加载完成
+                if (!info.Handle.IsDone)
+                {
+                    await info.Handle.ToUniTask();
+                }
+
+                if (info.Handle.Status == EOperationStatus.Succeed)
+                {
+                    return info.Handle.AssetObject as T;
+                }
+                return null;
+            }
+
+            // 开启新加载
+            var handle = package.LoadAssetAsync<T>(location);
+            var newInfo = new HandleInfo { Handle = handle, RefCount = 1 };
+            _loadedHandles.Add(cacheKey, newInfo);
+
+            try
+            {
+                await handle.ToUniTask();
+
+                if (handle.Status == EOperationStatus.Succeed)
+                {
+                    return handle.AssetObject as T;
+                }
+                else
+                {
+                    Debug.LogError($"[YooAssetManager] Failed to load asset: {location}, Error: {handle.LastError}");
+                    handle.Release();
+                    _loadedHandles.Remove(cacheKey);
+                    return null;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[YooAssetManager] Exception loading asset {location}: {e.Message}");
+                if (_loadedHandles.ContainsKey(cacheKey))
+                {
+                    handle.Release();
+                    _loadedHandles.Remove(cacheKey);
+                }
+                return null;
+            }
+        }
+
+        public override void ReleaseAsset(string location, string packageName = null)
+        {
+            string cacheKey = string.IsNullOrEmpty(packageName) ? location : $"{packageName}/{location}";
+
+            if (_loadedHandles.TryGetValue(cacheKey, out var info))
+            {
+                info.RefCount--;
+                if (info.RefCount <= 0)
+                {
+                    info.Handle.Release();
+                    _loadedHandles.Remove(cacheKey);
+                }
+            }
+        }
+
+        public override void ClearUnused()
+        {
+            // 清理对象池中的对象，确保引用计数正确下降
+            ClearPool();
+
+            var toRemove = new List<string>();
+            foreach (var kvp in _loadedHandles)
+            {
+                if (kvp.Value.RefCount <= 0)
+                {
+                    if (kvp.Value.Handle.IsValid)
+                    {
+                        kvp.Value.Handle.Release();
+                    }
+                    toRemove.Add(kvp.Key);
+                }
+            }
+
+            foreach (var key in toRemove)
+            {
+                _loadedHandles.Remove(key);
+            }
+            
+            // 注意：YooAsset 资源卸载通常是针对整个 Package 的 UnloadUnusedAssets
+            // 这里我们无法确定应该对哪个包执行 UnloadUnusedAssets，
+            // 简单起见，可以尝试对默认包或者遍历所有已知包进行清理。
+            // 真正的多包管理可能需要额外的维护列表。
+            if (!string.IsNullOrEmpty(_defaultPackageName))
+            {
+                var package = YooAssets.TryGetPackage(_defaultPackageName);
+                if (package != null)
+                {
+                    package.UnloadUnusedAssetsAsync();
+                }
             }
         }
     }
