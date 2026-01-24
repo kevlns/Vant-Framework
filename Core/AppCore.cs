@@ -90,17 +90,23 @@ namespace Vant.Core
         public GuideManager GuideManager { get; private set; }
 
         /// <summary>
-        /// Addressables 资源管理器
+        /// 主资源管理器，默认为 Addressables 资源管理器
         /// </summary>
         public IAssetManager MainAssetManager { get; private set; }
 
         /// <summary>
-        /// Resources 资源管理器
+        /// 降级备用资源管理器，默认为 ResourcesManager 资源管理器（用于在主资源管理器未找到资源时，尝试二次搜索）
         /// </summary>
         public IAssetManager FallbackAssetManager { get; private set; }
 
+        /// <summary>
+        /// 游戏任务管理器，默认的任务链为非熔断模式
+        /// </summary>
         public TaskManager TaskManager { get; private set; }
 
+        /// <summary>
+        /// 运行时游戏生命周期，可被订阅
+        /// </summary>
         private IGameLifeCycle _gameLifeCycle;
         public IGameLifeCycle GameLifeCycle => _gameLifeCycle;
 
