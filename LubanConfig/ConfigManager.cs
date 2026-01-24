@@ -17,6 +17,13 @@ namespace Vant.LubanConfig
         public object Tables { get; private set; }
 
         /// <summary>
+        /// 自定义加载函数（用于热更模式）
+        /// 参数：文件名 (不含后缀)
+        /// 返回：ByteBuf
+        /// </summary>
+        public Func<string, ByteBuf> CustomLoader { get; set; }
+
+        /// <summary>
         /// 获取强类型配置表
         /// </summary>
         /// <typeparam name="T">配置表类型</typeparam>
@@ -38,6 +45,15 @@ namespace Vant.LubanConfig
                 if (!AppCore.GlobalSettings.LUBAN_HOTFIX)
                 {
                     Tables = tableCreator(LoadByteBufFromResources);
+                }
+                else
+                {
+                    if (CustomLoader == null)
+                    {
+                        Debug.LogError("[ConfigManager] 热更模式开启，但未设置 CustomLoader！");
+                        return;
+                    }
+                    Tables = tableCreator(CustomLoader);
                 }
                 Debug.Log("[ConfigManager] 所有配置加载成功！");
             }

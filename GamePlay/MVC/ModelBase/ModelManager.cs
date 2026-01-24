@@ -86,5 +86,17 @@ namespace Vant.MVC
                 _models.Remove(type);
             }
         }
+
+        /// <summary>
+        /// 注销并销毁所有 Model
+        /// </summary>
+        public void UnregisterAll()
+        {
+            foreach (var model in _models.Values)
+            {
+                model.Dispose();
+            }
+            _models.Clear();
+        }
     }
 }
