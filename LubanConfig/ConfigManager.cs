@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Luban;
 using UnityEngine;
 using Vant.Core;
@@ -19,9 +20,9 @@ namespace Vant.LubanConfig
         /// <summary>
         /// 自定义加载函数（用于热更模式）
         /// 参数：文件名 (不含后缀)
-        /// 返回：ByteBuf
+        /// 返回：Task<ByteBuf>
         /// </summary>
-        public Func<string, ByteBuf> CustomLoader { get; set; }
+        public Func<string, Task<ByteBuf>> CustomLoader { get; set; }
 
         /// <summary>
         /// 获取强类型配置表
@@ -38,13 +39,13 @@ namespace Vant.LubanConfig
         /// </summary>
         /// <typeparam name="T">具体的 Tables 类型</typeparam>
         /// <param name="tableCreator">创建 Tables 的委托，传入加载函数</param>
-        public void Load<T>(Func<Func<string, ByteBuf>, T> tableCreator) where T : class
+        public async Task LoadAsync<T>(Func<Func<string, Task<ByteBuf>>, T> tableCreator) where T : class
         {
             try
             {
                 if (!AppCore.GlobalSettings.LUBAN_HOTFIX)
                 {
-                    Tables = tableCreator(LoadByteBufFromResources);
+                    Tables = tableCreator(LoadByteBufFromResourcesAsync);
                 }
                 else
                 {
@@ -76,7 +77,7 @@ namespace Vant.LubanConfig
             return Tables is T;
         }
 
-        private static ByteBuf LoadByteBufFromResources(string file)
+        private static Task<ByteBuf> LoadByteBufFromResourcesAsync(string file)
         {
             // 路径前缀，需确保文件位于 Resources/ConfigBinary/ 下
             // 去除可能的结尾 '/'，避免出现双斜杠或空段
@@ -89,7 +90,7 @@ namespace Vant.LubanConfig
             if (configFile == null)
             {
                 Debug.LogError($"[ConfigManager] 配置文件 {path} 未找到！");
-                return new ByteBuf(new byte[0]);
+                return Task.FromResult(new ByteBuf(new byte[0]));
             }
 
             // 拷贝数据
@@ -98,7 +99,7 @@ namespace Vant.LubanConfig
             // 优化：立即卸载 TextAsset 释放内存
             UnityEngine.Resources.UnloadAsset(configFile);
 
-            return new ByteBuf(bytes);
+            return Task.FromResult(new ByteBuf(bytes));
         }
     }
 }
