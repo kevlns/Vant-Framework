@@ -363,7 +363,6 @@ namespace Vant.UI.UIComponents.Editor
                         sb.AppendLine($"{indent}            {{");
                         sb.AppendLine($"{indent}                key = \"{key}\",");
                         sb.AppendLine($"{indent}                handle = {refData.alias}.gameObject");
-                        sb.AppendLine($"{indent}                ,autoBindButtonOnClick = true");
                         sb.AppendLine($"{indent}            }});");
                         sb.AppendLine($"{indent}        }}");
                     }
