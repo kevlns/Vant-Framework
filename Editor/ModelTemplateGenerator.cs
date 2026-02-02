@@ -7,6 +7,7 @@ namespace Vant.Editor
 {
     public class ModelTemplateGenerator : EditorWindow
     {
+        private const string NamespacePrefKey = "Vant.Editor.ModelTemplateGenerator.Namespace";
         private string _scriptName = "NewVantModel";
         private string _namespaceName = "";
         private string _targetPath = "Assets";
@@ -17,6 +18,7 @@ namespace Vant.Editor
         {
             var window = GetWindow<ModelTemplateGenerator>("Create Model Script");
             window._targetPath = GetSelectedPath();
+            window._namespaceName = EditorPrefs.GetString(NamespacePrefKey, "");
             window.Show();
         }
 
@@ -38,6 +40,7 @@ namespace Vant.Editor
 
             _scriptName = EditorGUILayout.TextField("Script Name", _scriptName);
             _namespaceName = EditorGUILayout.TextField("Namespace", _namespaceName);
+            EditorPrefs.SetString(NamespacePrefKey, _namespaceName);
             
             EditorGUILayout.LabelField("Target Path", _targetPath);
 

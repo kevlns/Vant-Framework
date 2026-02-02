@@ -1,5 +1,5 @@
 using System;
-using System.Threading.Tasks;
+using Cysharp.Threading.Tasks;
 using Luban;
 using UnityEngine;
 using Vant.Core;
@@ -20,9 +20,9 @@ namespace Vant.LubanConfig
         /// <summary>
         /// 自定义加载函数（用于热更模式）
         /// 参数：文件名 (不含后缀)
-        /// 返回：Task<ByteBuf>
+        /// 返回：ByteBuf
         /// </summary>
-        public Func<string, Task<ByteBuf>> CustomLoader { get; set; }
+        public Func<string, UniTask<ByteBuf>> CustomLoaderAsync { get; set; }
 
         /// <summary>
         /// 获取强类型配置表
@@ -35,34 +35,48 @@ namespace Vant.LubanConfig
         }
 
         /// <summary>
-        /// 加载配置表
+        /// 加载配置表（同步构造，用于非热更或已准备好同步加载函数）
         /// </summary>
         /// <typeparam name="T">具体的 Tables 类型</typeparam>
-        /// <param name="tableCreator">创建 Tables 的委托，传入加载函数</param>
-        public Task LoadAsync<T>(Func<Func<string, Task<ByteBuf>>, T> tableCreator) where T : class
+        /// <param name="tableCreator">创建 Tables 的委托，传入同步加载函数</param>
+        public void Load<T>(Func<Func<string, ByteBuf>, T> tableCreator) where T : class
         {
             try
             {
                 if (!AppCore.GlobalSettings.LUBAN_HOTFIX)
                 {
-                    Tables = tableCreator(LoadByteBufFromResourcesAsync);
+                    // 非热更模式：直接使用同步的 Resources.Load
+                    Tables = tableCreator(LoadByteBufFromResources);
                 }
                 else
                 {
-                    if (CustomLoader == null)
-                    {
-                        Debug.LogError("[ConfigManager] 热更模式开启，但未设置 CustomLoader！");
-                        return Task.CompletedTask;
-                    }
-                    Tables = tableCreator(CustomLoader);
+                    Debug.LogWarning("[ConfigManager] 热更模式建议使用异步加载入口 LoadAsync(Func<UniTask<T>>)。");
+                    Tables = tableCreator(LoadByteBufFromResources);
                 }
                 Debug.Log("[ConfigManager] 所有配置加载成功！");
             }
-            catch (global::System.Exception e)
+            catch (Exception e)
             {
-                Debug.LogError($"[ConfigManager] 加载配置时发生错误: {e.Message}");
+                Debug.LogError($"[ConfigManager] 加载配置时发生错误: {e.Message}\n{e.StackTrace}");
             }
-            return Task.CompletedTask;
+        }
+
+        /// <summary>
+        /// 加载配置表（异步构造，用于热更模式）
+        /// </summary>
+        /// <typeparam name="T">具体的 Tables 类型</typeparam>
+        /// <param name="tableCreatorAsync">异步创建 Tables 的委托</param>
+        public async UniTask LoadAsync<T>(Func<UniTask<T>> tableCreatorAsync) where T : class
+        {
+            try
+            {
+                Tables = await tableCreatorAsync();
+                Debug.Log("[ConfigManager] 所有配置加载成功！");
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ConfigManager] 加载配置时发生错误: {e.Message}\n{e.StackTrace}");
+            }
         }
 
         /// <summary>
@@ -78,7 +92,15 @@ namespace Vant.LubanConfig
             return Tables is T;
         }
 
-        private static Task<ByteBuf> LoadByteBufFromResourcesAsync(string file)
+        /// <summary>
+        /// 重置Tables
+        /// </summary>
+        public void Reset()
+        {
+            Tables = null;
+        }
+
+        private static ByteBuf LoadByteBufFromResources(string file)
         {
             // 路径前缀，需确保文件位于 Resources/ConfigBinary/ 下
             // 去除可能的结尾 '/'，避免出现双斜杠或空段
@@ -91,16 +113,13 @@ namespace Vant.LubanConfig
             if (configFile == null)
             {
                 Debug.LogError($"[ConfigManager] 配置文件 {path} 未找到！");
-                return Task.FromResult(new ByteBuf(new byte[0]));
+                return new ByteBuf(new byte[0]);
             }
 
-            // 拷贝数据
+            // 拷贝数据并卸载资源
             var bytes = configFile.bytes;
-
-            // 优化：立即卸载 TextAsset 释放内存
             UnityEngine.Resources.UnloadAsset(configFile);
-
-            return Task.FromResult(new ByteBuf(bytes));
+            return new ByteBuf(bytes);
         }
     }
 }

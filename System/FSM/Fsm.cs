@@ -45,7 +45,7 @@ namespace Vant.System.FSM
                     throw new Exception($"FSM state {type.FullName} is already exist.");
                 }
                 _states.Add(type, state);
-                state.OnInit(this);
+                state.Fsm = this;
             }
         }
 
@@ -60,7 +60,7 @@ namespace Vant.System.FSM
 
             _currentState = state;
             _currentStateTime = 0f;
-            _currentState.OnEnter(this);
+            _currentState.OnEnter();
         }
 
         public void ChangeState<TState>() where TState : FsmState<T>
@@ -78,17 +78,17 @@ namespace Vant.System.FSM
                 throw new Exception($"FSM state {type.FullName} is not exist.");
             }
 
-            _currentState.OnExit(this, false);
+            _currentState.OnExit(false);
             _currentState = state;
             _currentStateTime = 0f;
-            _currentState.OnEnter(this);
+            _currentState.OnEnter();
         }
 
         public void Update(float elapseSeconds, float realElapseSeconds)
         {
             if (_currentState == null || _isDestroyed) return;
             _currentStateTime += elapseSeconds;
-            _currentState.OnUpdate(this, elapseSeconds, realElapseSeconds);
+            _currentState.OnUpdate(elapseSeconds, realElapseSeconds);
         }
 
         public void Shutdown()
@@ -96,13 +96,13 @@ namespace Vant.System.FSM
             if (_isDestroyed) return;
             if (_currentState != null)
             {
-                _currentState.OnExit(this, true);
+                _currentState.OnExit(true);
                 _currentState = null;
             }
 
             foreach (var state in _states.Values)
             {
-                state.OnDestroy(this);
+                state.OnDestroy();
             }
             _states.Clear();
             _isDestroyed = true;
