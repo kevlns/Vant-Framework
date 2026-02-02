@@ -21,7 +21,6 @@ namespace Vant.GamePlay.Procedure
         /// 获取 AppCore 引用 (供流程状态使用)
         /// </summary>
         private AppCore _appCore;
-        public AppCore AppCore => _appCore;
 
         public ProcedureManager(AppCore appCore)
         {

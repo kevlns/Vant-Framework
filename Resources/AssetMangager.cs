@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
 using Object = UnityEngine.Object;
@@ -13,7 +15,12 @@ namespace Vant.Resources
         /// <summary>
         /// 异步加载资源
         /// </summary>
-        UniTask<T> LoadAssetAsync<T>(string path, string packageName = null) where T : Object;
+        UniTask<T> LoadAssetAsync<T>(string path, string packageName = null, Action<float> onProgress = null, CancellationToken cancellationToken = default) where T : Object;
+
+        /// <summary>
+        /// 异步加载多个资源
+        /// </summary>
+        UniTask<List<T>> LoadAssetsAsync<T>(IEnumerable<string> paths, string packageName = null, Action<float> onProgress = null, CancellationToken cancellationToken = default) where T : Object;
 
         /// <summary>
         /// 预加载资源（只加载不实例化），用于提前占用引用计数，避免进入界面时卡顿。
@@ -85,13 +92,54 @@ namespace Vant.Resources
             _poolRoot = go.transform;
         }
 
-        public abstract UniTask<T> LoadAssetAsync<T>(string path, string packageName = null) where T : Object;
+        public abstract UniTask<T> LoadAssetAsync<T>(string path, string packageName = null, Action<float> onProgress = null, CancellationToken cancellationToken = default) where T : Object;
         public abstract void ReleaseAsset(string path, string packageName = null);
         public abstract void ClearUnused();
 
+        public virtual async UniTask<List<T>> LoadAssetsAsync<T>(IEnumerable<string> paths, string packageName = null, Action<float> onProgress = null, CancellationToken cancellationToken = default) where T : Object
+        {
+            var result = new List<T>();
+            if (paths == null) return result;
+
+            var pathList = new List<string>();
+            foreach (var p in paths)
+            {
+                if (!string.IsNullOrEmpty(p)) pathList.Add(p);
+            }
+
+            if (pathList.Count == 0) return result;
+
+            var progress = new float[pathList.Count];
+            var tasks = new UniTask<T>[pathList.Count];
+            for (int i = 0; i < pathList.Count; i++)
+            {
+                int index = i;
+                tasks[index] = LoadAssetAsync<T>(
+                    pathList[index],
+                    packageName,
+                    p =>
+                    {
+                        progress[index] = p;
+                        if (onProgress != null)
+                        {
+                            float sum = 0f;
+                            for (int j = 0; j < progress.Length; j++) sum += progress[j];
+                            onProgress(sum / progress.Length);
+                        }
+                    },
+                    cancellationToken
+                );
+            }
+
+            var loaded = await UniTask.WhenAll(tasks);
+            result.AddRange(loaded);
+            onProgress?.Invoke(1f);
+            return result;
+        }
+
         public virtual async UniTask PreloadAssetAsync<T>(string path, string packageName = null) where T : Object
         {
-            await LoadAssetAsync<T>(path, packageName);
+            await LoadAssetAsync<T>(path, packageName, null, CancellationToken.None);
         }
 
         public virtual async UniTask PreloadAssetsAsync<T>(IEnumerable<string> paths, string packageName = null) where T : Object
