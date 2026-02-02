@@ -39,7 +39,7 @@ namespace Vant.LubanConfig
         /// </summary>
         /// <typeparam name="T">具体的 Tables 类型</typeparam>
         /// <param name="tableCreator">创建 Tables 的委托，传入加载函数</param>
-        public async Task LoadAsync<T>(Func<Func<string, Task<ByteBuf>>, T> tableCreator) where T : class
+        public Task LoadAsync<T>(Func<Func<string, Task<ByteBuf>>, T> tableCreator) where T : class
         {
             try
             {
@@ -52,7 +52,7 @@ namespace Vant.LubanConfig
                     if (CustomLoader == null)
                     {
                         Debug.LogError("[ConfigManager] 热更模式开启，但未设置 CustomLoader！");
-                        return;
+                        return Task.CompletedTask;
                     }
                     Tables = tableCreator(CustomLoader);
                 }
@@ -62,6 +62,7 @@ namespace Vant.LubanConfig
             {
                 Debug.LogError($"[ConfigManager] 加载配置时发生错误: {e.Message}");
             }
+            return Task.CompletedTask;
         }
 
         /// <summary>

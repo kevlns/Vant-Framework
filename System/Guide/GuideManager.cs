@@ -196,7 +196,7 @@ namespace Vant.System.Guide
             InternalTryStartGuide();
         }
 
-        private async void InternalTryStartGuide()
+        private void InternalTryStartGuide()
         {
             ConditionContext.UpdateContext();
             var validGroups = _dataCore.GetValidGuideGroups?.Invoke();
@@ -256,6 +256,7 @@ namespace Vant.System.Guide
             try
             {
                 // TODO 任务执行
+                await UniTask.CompletedTask;
             }
             catch (Exception ex)
             {
