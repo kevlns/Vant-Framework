@@ -184,7 +184,7 @@ namespace Vant.UI.UIFramework
             _maskGo = new GameObject("UIManager_Mask");
             // 初始挂在 UI Root 下，但隐藏
             _maskGo.transform.SetParent(_uiRoot, false);
-            
+
             var rect = _maskGo.AddComponent<RectTransform>();
             rect.anchorMin = Vector2.zero;
             rect.anchorMax = Vector2.one;
@@ -214,7 +214,7 @@ namespace Vant.UI.UIFramework
             foreach (var ui in _activeUIs.Values)
             {
                 if (ui == null || ui.gameObject == null || !ui.gameObject.activeInHierarchy) continue;
-                
+
                 // 忽略不需要遮罩的 UI (如 Overlay 类型的 HUD、Toast 等)
                 if (!ui.Config.NeedMask) continue;
 
@@ -237,7 +237,7 @@ namespace Vant.UI.UIFramework
                 {
                     _maskGo.transform.SetParent(topUI.transform.parent, false);
                 }
-                
+
                 // 设置 sibling index 为目标 UI 的 index
                 // 这样 mask 就在 topUI 的后面 (渲染顺序上)，挡住 topUI 之前的所有物体
                 _maskGo.transform.SetSiblingIndex(topUI.transform.GetSiblingIndex());
@@ -344,29 +344,10 @@ namespace Vant.UI.UIFramework
                         return null;
                     }
 
-                    // 修复实例化后的缩放和位置问题
-                    // (已移动到下方统一处理，确保缓存 UI 也能被重置)
-                    /*
-                    var rt = go.GetComponent<RectTransform>();
-                    if (rt != null)
-                    {
-                        rt.localScale = Vector3.one;
-                        rt.localPosition = Vector3.zero;
-                        rt.anchoredPosition3D = Vector3.zero;
-
-                        // 如果是全屏拉伸布局，确保 offset 也归零 (防止某些情况下实例化产生的微小误差)
-                        if (rt.anchorMin == Vector2.zero && rt.anchorMax == Vector2.one)
-                        {
-                            rt.offsetMin = Vector2.zero;
-                            rt.offsetMax = Vector2.zero;
-                        }
-                    }
-                    */
-
                     // 如果预制体根节点带有 Canvas 但没有 GraphicRaycaster，会导致吞掉事件但不响应点击
                     // 为了兼容旧资源，这里自动补一个 GraphicRaycaster
-                    var rootCanvas = go.GetComponent<Canvas>() ?? go.AddComponent<Canvas>();
-                    if (go.GetComponent<GraphicRaycaster>() == null)
+                    var rootCanvas = go.GetComponent<Canvas>();
+                    if (rootCanvas != null && go.GetComponent<GraphicRaycaster>() == null)
                     {
                         go.AddComponent<GraphicRaycaster>();
                         Debug.LogWarning($"[UIManager] Prefab {assetPath} has Canvas but no GraphicRaycaster. Added GraphicRaycaster automatically.");

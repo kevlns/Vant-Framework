@@ -39,8 +39,8 @@ namespace Vant.Core
         {
             public static ECodeMode CODE_MODE = ECodeMode.Debug;
             public static bool LUBAN_HOTFIX = false;
-            public static string LUBAN_CONFIG_PATH_NON_HF = "";  // 非热更模式下，相对于 Assets/Resources/ 的路径
-            public static string LUBAN_CONFIG_PATH_HF = "";  // 热更模式下，AB包的路径
+            public static string LUBAN_CONFIG_PATH_NON_HF = "";  // 非热更模式下，相对于 Assets/Resources/ 的路径前缀
+            public static string LUBAN_CONFIG_PATH_HF = "";  // 热更模式下，AB包的路径前缀
             public static uint UI_LRU_MAX_SIZE = 5;
         }
 

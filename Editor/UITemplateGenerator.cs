@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.IO;
+using System.Text;
 using UnityEditor;
 using UnityEngine;
 
@@ -7,6 +8,7 @@ namespace Vant.Editor
 {
     public class UITemplateGenerator : EditorWindow
     {
+        private const string NamespacePrefKey = "Vant.Editor.UITemplateGenerator.Namespace";
         private string _scriptName = "NewVantUI";
         private string _namespaceName = "";
         private string _targetPath = "Assets";
@@ -17,6 +19,7 @@ namespace Vant.Editor
         {
             var window = GetWindow<UITemplateGenerator>("Create UI Script");
             window._targetPath = GetSelectedPath();
+            window._namespaceName = EditorPrefs.GetString(NamespacePrefKey, "");
             window.Show();
         }
 
@@ -38,6 +41,7 @@ namespace Vant.Editor
 
             _scriptName = EditorGUILayout.TextField("Script Name", _scriptName);
             _namespaceName = EditorGUILayout.TextField("Namespace", _namespaceName);
+            EditorPrefs.SetString(NamespacePrefKey, _namespaceName);
 
             EditorGUILayout.LabelField("Target Path", _targetPath);
 
@@ -87,95 +91,140 @@ namespace Vant.Editor
 
         private string GenerateTemplate(string className, string namespaceName)
         {
-            return $@"using System;
-using System.Collections.Generic;
-using UnityEngine;
-using UnityEngine.UI;
-using Cysharp.Threading.Tasks;
-using Vant.Core;
-using Vant.MVC;
-using Vant.UI.UIFramework;
+            string constName = ToUpperSnake(className);
+            var sb = new StringBuilder();
+            sb.AppendLine("using System;");
+            sb.AppendLine("using System.Collections.Generic;");
+            sb.AppendLine("using UnityEngine;");
+            sb.AppendLine("using UnityEngine.UI;");
+            sb.AppendLine("using Cysharp.Threading.Tasks;");
+            sb.AppendLine("using Vant.Core;");
+            sb.AppendLine("using Vant.MVC;");
+            sb.AppendLine("using Vant.UI.UIFramework;");
+            sb.AppendLine();
 
-namespace {namespaceName}
-{{
-    public class {className} : AbstractUIBase
-    {{
+            bool hasNamespace = !string.IsNullOrWhiteSpace(namespaceName);
+            if (hasNamespace)
+            {
+                sb.AppendLine($"namespace {namespaceName}");
+                sb.AppendLine("{");
+            }
 
-        #region UI Configuration
+            string indent = hasNamespace ? "    " : string.Empty;
 
-        public override UIConfig RegisterConfig => StaticConfig;
-        public static readonly UIConfig StaticConfig = new UIConfig
-        {{
-            Name = ""{className}"",
-            AssetPath = """",
-            UIClass = typeof({className}),
-            Layer = UILayer.Normal,
-            Mode = UIMode.Overlay,
-            NeedMask = false,
-            IsCacheable = true,
-            AllowMultiInstance = false,
-            EnterAnimation = null,
-            ExitAnimation = null,
-        }};
+            sb.AppendLine($"{indent}/// <summary>");
+            sb.AppendLine($"{indent}/// UI 打开事件参数定义");
+            sb.AppendLine($"{indent}/// </summary>");
+            sb.AppendLine($"{indent}public static partial class UIName");
+            sb.AppendLine($"{indent}{{");
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// UI 名称常量（{className} -> {constName}）");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    public const string {constName} = \"{className}\";");
+            sb.AppendLine($"{indent}}}");
+            sb.AppendLine();
 
-        #endregion
+            sb.AppendLine($"{indent}public class {className} : AbstractUIBase");
+            sb.AppendLine($"{indent}{{");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    #region UI Configuration");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    public override UIConfig RegisterConfig => StaticConfig;");
+            sb.AppendLine($"{indent}    public static readonly UIConfig StaticConfig = new UIConfig");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        Name = \"{className}\",");
+            sb.AppendLine($"{indent}        AssetPath = \"\",");
+            sb.AppendLine($"{indent}        UIClass = typeof({className}),");
+            sb.AppendLine($"{indent}        Layer = UILayer.Normal,");
+            sb.AppendLine($"{indent}        Mode = UIMode.Overlay,");
+            sb.AppendLine($"{indent}        NeedMask = false,");
+            sb.AppendLine($"{indent}        IsCacheable = true,");
+            sb.AppendLine($"{indent}        AllowMultiInstance = false,");
+            sb.AppendLine($"{indent}        EnterAnimation = null,");
+            sb.AppendLine($"{indent}        ExitAnimation = null,");
+            sb.AppendLine($"{indent}    }};");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    #endregion");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    #region Lifecycle");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 1. 创建时调用 (只调用一次)");
+            sb.AppendLine($"{indent}    /// 用于初始化组件引用、事件监听等");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    protected override void OnCreate()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        base.OnCreate();");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 2. 打开前调用");
+            sb.AppendLine($"{indent}    /// 用于重置状态、准备数据。支持异步。");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    protected override async UniTask OnBeforeOpen(object args)");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        await base.OnBeforeOpen(args);");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 3. 刷新时调用");
+            sb.AppendLine($"{indent}    /// 用于将数据绑定到 UI 元素");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    protected override void OnRefresh()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        base.OnRefresh();");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 4. 打开后调用 (动画播放完毕后)");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    protected override async UniTask OnAfterOpen()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        await base.OnAfterOpen();");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 5. 关闭前调用");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    protected override async UniTask OnBeforeClose()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        await base.OnBeforeClose();");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    /// <summary>");
+            sb.AppendLine($"{indent}    /// 7. 销毁时调用");
+            sb.AppendLine($"{indent}    /// </summary>");
+            sb.AppendLine($"{indent}    protected override void OnDestroyUI()");
+            sb.AppendLine($"{indent}    {{");
+            sb.AppendLine($"{indent}        base.OnDestroyUI();");
+            sb.AppendLine($"{indent}    }}");
+            sb.AppendLine();
+            sb.AppendLine($"{indent}    #endregion");
+            sb.AppendLine($"{indent}}}");
 
-        #region Lifecycle
+            if (hasNamespace)
+            {
+                sb.AppendLine("}");
+            }
 
-        /// <summary>
-        /// 1. 创建时调用 (只调用一次)
-        /// 用于初始化组件引用、事件监听等
-        /// </summary>
-        protected override void OnCreate()
-        {{
-            base.OnCreate();
-        }}
+            return sb.ToString();
+        }
 
-        /// <summary>
-        /// 2. 打开前调用
-        /// 用于重置状态、准备数据。支持异步。
-        /// </summary>
-        protected override async UniTask OnBeforeOpen(object args)
-        {{
-            await base.OnBeforeOpen(args);
-        }}
+        private static string ToUpperSnake(string input)
+        {
+            if (string.IsNullOrEmpty(input)) return input;
 
-        /// <summary>
-        /// 3. 刷新时调用
-        /// 用于将数据绑定到 UI 元素
-        /// </summary>
-        protected override void OnRefresh()
-        {{
-            base.OnRefresh();
-        }}
-
-        /// <summary>
-        /// 4. 打开后调用 (动画播放完毕后)
-        /// </summary>
-        protected override async UniTask OnAfterOpen()
-        {{
-            await base.OnAfterOpen();
-        }}
-
-        /// <summary>
-        /// 5. 关闭前调用
-        /// </summary>
-        protected override async UniTask OnBeforeClose()
-        {{
-            await base.OnBeforeClose();
-        }}
-
-        /// <summary>
-        /// 7. 销毁时调用
-        /// </summary>
-        protected override void OnDestroyUI()
-        {{
-            base.OnDestroyUI();
-        }}
-
-        #endregion
-    }}
-}}";
+            var sb = new StringBuilder();
+            for (int i = 0; i < input.Length; i++)
+            {
+                char c = input[i];
+                if (char.IsUpper(c) && i > 0)
+                {
+                    sb.Append('_');
+                }
+                sb.Append(char.ToUpperInvariant(c));
+            }
+            return sb.ToString();
         }
     }
 }

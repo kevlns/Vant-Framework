@@ -52,7 +52,6 @@ namespace Vant.MVC
 
             _canvas = gameObject.GetComponent<Canvas>();
             _canvasGroup = gameObject.GetComponent<CanvasGroup>();
-            if (_canvas == null) _canvas = gameObject.AddComponent<Canvas>();
             if (_canvasGroup == null) _canvasGroup = gameObject.AddComponent<CanvasGroup>();
 
             OnCreate();

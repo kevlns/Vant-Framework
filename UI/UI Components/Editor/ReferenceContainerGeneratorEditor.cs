@@ -46,13 +46,29 @@ namespace Vant.UI.UIComponents.Editor
             EditorGUILayout.PropertyField(serializedObject.FindProperty("generatePath"), new GUIContent("Generate Path (Relative to Assets)"));
             if (GUILayout.Button("...", GUILayout.Width(30)))
             {
-                string path = EditorUtility.OpenFolderPanel("Select Generate Path", Application.dataPath, "");
+                var generatePathProp = serializedObject.FindProperty("generatePath");
+                string startPath = Application.dataPath;
+
+                if (!string.IsNullOrEmpty(generatePathProp.stringValue))
+                {
+                    string candidatePath = Path.Combine(Application.dataPath, generatePathProp.stringValue);
+                    if (Directory.Exists(candidatePath))
+                    {
+                        startPath = candidatePath;
+                    }
+                    else
+                    {
+                        EditorUtility.DisplayDialog("Error", "The specified generate path does not exist. Opening Assets folder instead.", "OK");
+                    }
+                }
+
+                string path = EditorUtility.OpenFolderPanel("Select Generate Path", startPath, "");
                 if (!string.IsNullOrEmpty(path))
                 {
                     if (path.StartsWith(Application.dataPath))
                     {
                         path = path.Substring(Application.dataPath.Length + 1);
-                        serializedObject.FindProperty("generatePath").stringValue = path;
+                        generatePathProp.stringValue = path;
                     }
                     else
                     {
