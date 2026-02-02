@@ -15,9 +15,9 @@ namespace Vant.System
 
         public TaskManager(AppCore appCore)
         {
+            Instance = this;
             _appCore = appCore;
             _defaultChain = new TaskChain(this, needFuse: false);
-            Instance = this;
         }
 
         /// <summary>

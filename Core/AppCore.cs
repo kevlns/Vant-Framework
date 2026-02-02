@@ -1,4 +1,5 @@
 using Vant.System;
+using Vant.System.Scene;
 using Vant.System.GM;
 using Vant.System.Guide;
 using Vant.LubanConfig;
@@ -90,6 +91,11 @@ namespace Vant.Core
         public GuideManager GuideManager { get; private set; }
 
         /// <summary>
+        /// 场景管理器
+        /// </summary>
+        public SceneManager SceneManager { get; private set; }
+
+        /// <summary>
         /// 主资源管理器，默认为 Addressables 资源管理器
         /// </summary>
         public IAssetManager MainAssetManager { get; private set; }
@@ -141,6 +147,9 @@ namespace Vant.Core
 
             // 8. 初始化引导管理器
             GuideManager = new GuideManager(this);
+
+            // 9. 初始化场景管理器
+            SceneManager = new SceneManager(this, MainAssetManager);
         }
     }
 }
