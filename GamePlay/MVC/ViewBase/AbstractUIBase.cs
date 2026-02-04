@@ -190,11 +190,16 @@ namespace Vant.MVC
             }
         }
 
-        public async UniTask CloseSelf()
+        public void CloseSelf()
+        {
+            InternalCloseSelf().Forget();
+        }
+
+        internal async UniTask InternalCloseSelf()
         {
             if (UIManager == null)
             {
-                Debug.LogWarning($"[UI] CloseSelfAsync called but UIManager is null. UI: {Config?.Name}");
+                Debug.LogWarning($"[UI] InternalCloseSelf called but UIManager is null. UI: {Config?.Name}");
                 await UniTask.CompletedTask;
                 return;
             }
