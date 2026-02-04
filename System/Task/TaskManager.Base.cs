@@ -12,6 +12,7 @@ namespace Vant.System
         private AppCore _appCore;
         private readonly object _gate = new object();
         public static TaskManager Instance { get; private set; }
+        public event Action ResetEvent;
 
         public TaskManager(AppCore appCore)
         {
@@ -38,6 +39,7 @@ namespace Vant.System
             {
                 old?.Dispose();
                 _defaultChain.ResetCTS();
+                ResetEvent?.Invoke();
             }
         }
     }
