@@ -46,6 +46,9 @@ namespace Vant.UI.UIFramework
         // 正在加载中的 UI (防止重复加载)
         private readonly HashSet<string> _loadingSet = new HashSet<string>();
 
+        // 正在关闭中的 UI (防止重复关闭)
+        private readonly HashSet<AbstractUIBase> _closingSet = new HashSet<AbstractUIBase>();
+
         // 全屏遮罩 (用于屏蔽操作)
         private GameObject _maskGo;
 
@@ -430,53 +433,63 @@ namespace Vant.UI.UIFramework
         {
             if (ui == null) return;
 
-            // 1. 执行关闭流程
-            await ui.InternalClose();
+            // 防止重复关闭 (fire-and-forget 场景下可能同时触发多次关闭)
+            if (!_closingSet.Add(ui)) return;
 
-            // 2. 处理 UI 栈逻辑
-            ProcessStackOnClose(ui);
-
-            // 3. 移除活动记录
-            if (!ui.Config.AllowMultiInstance)
+            try
             {
-                _activeUIs.Remove(ui.Config.AssetPath);
-            }
+                // 1. 执行关闭流程
+                await ui.InternalClose();
 
-            // 刷新遮罩
-            RefreshMaskState();
+                // 2. 处理 UI 栈逻辑
+                ProcessStackOnClose(ui);
 
-            // 4. 放入缓存或销毁
-            // 单实例 UI：按配置参与 LRU 缓存
-            // 多实例 UI：只允许一份进缓存，其余直接销毁，避免短时间连点堆积大量缓存对象
-            if (AppCore.GlobalSettings.UI_LRU_MAX_SIZE > 0 && ui.Config.IsCacheable)
-            {
+                // 3. 移除活动记录
                 if (!ui.Config.AllowMultiInstance)
                 {
-                    // 非多实例：正常放入缓存池（LRU 满了会触发 OnCacheRemove -> DestroyUI）
-                    MoveToCache(ui);
-                    _uiCache.Put(ui.Config.AssetPath, ui);
+                    _activeUIs.Remove(ui.Config.AssetPath);
                 }
-                else
+
+                // 刷新遮罩
+                RefreshMaskState();
+
+                // 4. 放入缓存或销毁
+                // 单实例 UI：按配置参与 LRU 缓存
+                // 多实例 UI：只允许一份进缓存，其余直接销毁，避免短时间连点堆积大量缓存对象
+                if (AppCore.GlobalSettings.UI_LRU_MAX_SIZE > 0 && ui.Config.IsCacheable)
                 {
-                    // 多实例：仅当缓存中不存在该 AssetPath 时才缓存一份
-                    var cached = _uiCache.Get(ui.Config.AssetPath);
-                    if (cached == null || cached == ui)
+                    if (!ui.Config.AllowMultiInstance)
                     {
+                        // 非多实例：正常放入缓存池（LRU 满了会触发 OnCacheRemove -> DestroyUI）
                         MoveToCache(ui);
                         _uiCache.Put(ui.Config.AssetPath, ui);
                     }
                     else
                     {
-                        // 已经有一份缓存，当前实例直接销毁
-                        DestroyUI(ui);
-                        // 将之前的缓存放回去，维持缓存不变
-                        _uiCache.Put(ui.Config.AssetPath, cached);
+                        // 多实例：仅当缓存中不存在该 AssetPath 时才缓存一份
+                        var cached = _uiCache.Get(ui.Config.AssetPath);
+                        if (cached == null || cached == ui)
+                        {
+                            MoveToCache(ui);
+                            _uiCache.Put(ui.Config.AssetPath, ui);
+                        }
+                        else
+                        {
+                            // 已经有一份缓存，当前实例直接销毁
+                            DestroyUI(ui);
+                            // 将之前的缓存放回去，维持缓存不变
+                            _uiCache.Put(ui.Config.AssetPath, cached);
+                        }
                     }
                 }
+                else
+                {
+                    DestroyUI(ui);
+                }
             }
-            else
+            finally
             {
-                DestroyUI(ui);
+                _closingSet.Remove(ui);
             }
         }
 
@@ -723,7 +736,7 @@ namespace Vant.UI.UIFramework
         /// 关闭指定层级内的所有 UI（包含该层级的多实例 UI）。
         /// 注意：缓存层（UICache）中的 UI 不会被关闭（它们本就处于关闭态）。
         /// </summary>
-        public void CloseAllInLayer(UILayer layer)
+        private void CloseAllInLayer(UILayer layer)
         {
             CloseAllInLayers(layer);
         }
@@ -731,7 +744,7 @@ namespace Vant.UI.UIFramework
         /// <summary>
         /// 关闭指定多个层级内的所有 UI（包含多实例 UI）。
         /// </summary>
-        public void CloseAllInLayers(params UILayer[] layers)
+        private void CloseAllInLayers(params UILayer[] layers)
         {
             if (layers == null || layers.Length == 0) return;
 

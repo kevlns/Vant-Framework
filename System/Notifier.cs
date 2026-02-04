@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.Threading;
+using Cysharp.Threading.Tasks;
 using UnityEngine;
 using Vant.Core;
 
@@ -32,6 +34,45 @@ namespace Vant.System
 
         // 使用 Enum 作为 Key，Unity 2018+ 后 Dictionary<Enum, T> 不再产生额外 GC
         private readonly Dictionary<Enum, List<Listener>> _eventMap = new Dictionary<Enum, List<Listener>>();
+
+        // 用于管理延迟触发的 CancellationTokenSource
+        private CancellationTokenSource _delayCts;
+
+        /// <summary>
+        /// 初始化延迟触发功能（需要在 TaskManager 初始化后调用）
+        /// </summary>
+        public void InitDelayedDispatch()
+        {
+            if (TaskManager.Instance == null)
+            {
+                Debug.LogWarning("[Notifier] TaskManager.Instance is null, delayed dispatch will not work.");
+                return;
+            }
+
+            RefreshCTS();
+            TaskManager.Instance.ResetEvent += OnTaskManagerReset;
+        }
+
+        private void OnTaskManagerReset()
+        {
+            RefreshCTS();
+        }
+
+        private void RefreshCTS()
+        {
+            _delayCts?.Dispose();
+            _delayCts = TaskManager.Instance?.CreateLinkedCTS();
+        }
+
+        private CancellationToken GetDelayToken()
+        {
+            // 懒初始化
+            if (_delayCts == null && TaskManager.Instance != null)
+            {
+                InitDelayedDispatch();
+            }
+            return _delayCts?.Token ?? CancellationToken.None;
+        }
 
         /// <summary>
         /// 安全获取参数：当参数数组为 null 或长度不足时，返回 default(T)。
@@ -236,6 +277,53 @@ namespace Vant.System
                     // 但为了安全起见，只对明确的 Unity Object 销毁做自动移除
                 }
             }
+        }
+
+        #endregion
+
+        #region DispatchDelayed (延迟触发)
+
+        /// <summary>
+        /// 延迟若干帧后触发事件 (fire-and-forget)
+        /// </summary>
+        /// <param name="eventType">事件类型</param>
+        /// <param name="frameDelay">延迟帧数，默认 1 帧</param>
+        public void DispatchDelayed(Enum eventType, int frameDelay = 1)
+        {
+            DispatchDelayedInternal(eventType, null, frameDelay).Forget();
+        }
+
+        public void DispatchDelayed<T>(Enum eventType, T arg1, int frameDelay = 1)
+        {
+            DispatchDelayedInternal(eventType, new object[] { arg1 }, frameDelay).Forget();
+        }
+
+        public void DispatchDelayed<T1, T2>(Enum eventType, T1 arg1, T2 arg2, int frameDelay = 1)
+        {
+            DispatchDelayedInternal(eventType, new object[] { arg1, arg2 }, frameDelay).Forget();
+        }
+
+        public void DispatchDelayed<T1, T2, T3>(Enum eventType, T1 arg1, T2 arg2, T3 arg3, int frameDelay = 1)
+        {
+            DispatchDelayedInternal(eventType, new object[] { arg1, arg2, arg3 }, frameDelay).Forget();
+        }
+
+        private async UniTask DispatchDelayedInternal(Enum eventType, object[] args, int frameDelay)
+        {
+            if (frameDelay < 0) return;
+
+            var token = GetDelayToken();
+
+            try
+            {
+                if (frameDelay > 0)
+                {
+                    await UniTask.DelayFrame(frameDelay, PlayerLoopTiming.Update, token);
+                }
+
+                DispatchInternal(eventType, args);
+            }
+            catch { }
         }
 
         #endregion
