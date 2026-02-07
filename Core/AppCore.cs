@@ -71,6 +71,11 @@ namespace Vant.Core
         public UIManager UIManager { get; private set; }
 
         /// <summary>
+        /// MVC Entity 管理器
+        /// </summary>
+        public MVCEntityManager MVCEntityManager { get; private set; }
+
+        /// <summary>
         /// 流程管理器
         /// </summary>
         public ProcedureManager ProcedureManager { get; private set; }
@@ -135,6 +140,9 @@ namespace Vant.Core
 
             // 4. 初始化 UI 管理器，注入依赖
             UIManager = new UIManager(this, MainAssetManager, FallbackAssetManager);
+
+            // 4.1 初始化 MVC Entity 管理器
+            MVCEntityManager = new MVCEntityManager(this);
 
             // 5. 初始化流程管理器
             ProcedureManager = new ProcedureManager(this);

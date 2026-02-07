@@ -10,8 +10,16 @@ namespace Vant.MVC
     /// UI 基类
     /// 负责定义 UI 的生命周期和基本属性
     /// </summary>
-    public abstract class AbstractUIBase
+    public abstract class AbstractUIBase : IView
     {
+        private enum UIState
+        {
+            None,
+            Opened,
+            HiddenInStack
+        }
+
+
         public UIConfig Config { get; private set; }
 
         /// <summary>
@@ -19,6 +27,7 @@ namespace Vant.MVC
         /// Override in subclasses and typically return a static config (e.g. MyPanel.StaticConfig).
         /// </summary>
         public virtual UIConfig RegisterConfig => null;
+        private UIState _state = UIState.None;
         public object Context { get; private set; }
         public GameObject gameObject { get; private set; }
         public Transform transform { get; private set; }
@@ -62,12 +71,12 @@ namespace Vant.MVC
             Context = args;
 
             // 1. 打开前处理
-            await OnBeforeOpen(args);
+            await OnBeforeOpen(Context);
 
             gameObject.SetActive(true);
 
             // 2. 刷新数据
-            OnRefresh();
+            OnRefreshOnceOnOpen();
 
             // 3. 播放入场动画 (如果有)
             if (Config.EnterAnimation != null)
@@ -100,6 +109,7 @@ namespace Vant.MVC
                 gameObject.transform.localScale = Vector3.one;
             }
 
+            _state = UIState.None;
             gameObject.SetActive(false);
             appCore.Notifier.Dispatch(UIInternalEvent.UI_CLOSED, Config.Name);
         }
@@ -130,40 +140,40 @@ namespace Vant.MVC
 
         #endregion
 
-        #region Virtual Methods (子类重写)
+        #region UI生命周期函数 (子类重写)
 
         /// <summary>
-        /// 1. 创建时调用 (只调用一次)
+        /// 创建时调用 (只调用一次)
         /// 用于初始化组件引用、事件监听等
         /// </summary>
         protected virtual void OnCreate() { }
 
         /// <summary>
-        /// 2. 打开前调用
+        /// 打开前调用
         /// 用于重置状态、准备数据。支持异步。
         /// </summary>
         protected virtual async UniTask OnBeforeOpen(object args) { await UniTask.CompletedTask; }
 
         /// <summary>
-        /// 3. 刷新时调用
+        /// 刷新时调用
         /// 用于将数据绑定到 UI 元素
         /// </summary>
-        protected virtual void OnRefresh() { }
+        protected virtual void OnRefreshOnceOnOpen() { }
 
         /// <summary>
-        /// 4. 打开后调用 (动画播放完毕后)
+        /// 打开后调用 (动画播放完毕后)
         /// 用于开始引导、自动滚动等需要 UI 完全展示后的逻辑
         /// </summary>
         protected virtual async UniTask OnAfterOpen() { await UniTask.CompletedTask; }
 
         /// <summary>
-        /// 5. 关闭前调用
+        /// 关闭前调用
         /// 用于停止计时器、保存临时数据等
         /// </summary>
         protected virtual async UniTask OnBeforeClose() { await UniTask.CompletedTask; }
 
         /// <summary>
-        /// 7. 销毁时调用
+        /// 销毁时调用
         /// 用于释放非托管资源
         /// </summary>
         protected virtual void OnDestroyUI() { }
@@ -188,11 +198,6 @@ namespace Vant.MVC
                 _canvasGroup.interactable = interactable;
                 _canvasGroup.blocksRaycasts = interactable;
             }
-        }
-
-        public void CloseSelf()
-        {
-            InternalCloseSelf().Forget();
         }
 
         internal async UniTask InternalCloseSelf()
@@ -257,6 +262,34 @@ namespace Vant.MVC
                 }
             }
         }
+
+        #endregion
+
+        #region IView 接口实现
+
+        public void InitView(object args = null) { }
+
+        public async void ShowView(object args = null)
+        {
+            switch (_state)
+            {
+                case UIState.None:
+                    await UIManager.OpenInstanceAsync(Config, args);
+                    _state = UIState.Opened;
+                    break;
+                case UIState.Opened:
+                    OnRefreshOnceOnOpen();
+                    break;
+                case UIState.HiddenInStack:
+                    await UIManager.OpenInstanceAsync(Config, Context);
+                    _state = UIState.Opened;
+                    break;
+            }
+        }
+
+        public void HideView() => InternalCloseSelf().Forget();
+
+        public void DestroyView() => OnDestroyUI();
 
         #endregion
     }

@@ -48,7 +48,8 @@ namespace Vant.UI.UIFramework
         OPEN_UI,
         CLOSE_UI,
         UI_OPENED,
-        UI_CLOSED
+        UI_CLOSED,
+        CLOSE_ALL_IN_LAYERS
     }
 
     /// <summary>
