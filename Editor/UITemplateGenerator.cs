@@ -149,7 +149,7 @@ namespace Vant.Editor
             sb.AppendLine($"{indent}    #region Lifecycle");
             sb.AppendLine();
             sb.AppendLine($"{indent}    /// <summary>");
-            sb.AppendLine($"{indent}    /// 1. 创建时调用 (只调用一次)");
+            sb.AppendLine($"{indent}    /// 创建时调用 (只调用一次)");
             sb.AppendLine($"{indent}    /// 用于初始化组件引用、事件监听等");
             sb.AppendLine($"{indent}    /// </summary>");
             sb.AppendLine($"{indent}    protected override void OnCreate()");
@@ -158,7 +158,7 @@ namespace Vant.Editor
             sb.AppendLine($"{indent}    }}");
             sb.AppendLine();
             sb.AppendLine($"{indent}    /// <summary>");
-            sb.AppendLine($"{indent}    /// 2. 打开前调用");
+            sb.AppendLine($"{indent}    /// 打开前调用");
             sb.AppendLine($"{indent}    /// 用于重置状态、准备数据。支持异步。");
             sb.AppendLine($"{indent}    /// </summary>");
             sb.AppendLine($"{indent}    protected override async UniTask OnBeforeOpen(object args)");
@@ -167,16 +167,16 @@ namespace Vant.Editor
             sb.AppendLine($"{indent}    }}");
             sb.AppendLine();
             sb.AppendLine($"{indent}    /// <summary>");
-            sb.AppendLine($"{indent}    /// 3. 刷新时调用");
+            sb.AppendLine($"{indent}    /// 打开UI时立即刷新一次");
             sb.AppendLine($"{indent}    /// 用于将数据绑定到 UI 元素");
             sb.AppendLine($"{indent}    /// </summary>");
-            sb.AppendLine($"{indent}    protected override void OnRefresh()");
+            sb.AppendLine($"{indent}    protected override void OnRefreshOnceOnOpen()");
             sb.AppendLine($"{indent}    {{");
-            sb.AppendLine($"{indent}        base.OnRefresh();");
+            sb.AppendLine($"{indent}        base.OnRefreshOnceOnOpen();");
             sb.AppendLine($"{indent}    }}");
             sb.AppendLine();
             sb.AppendLine($"{indent}    /// <summary>");
-            sb.AppendLine($"{indent}    /// 4. 打开后调用 (动画播放完毕后)");
+            sb.AppendLine($"{indent}    /// 打开后调用 (动画播放完毕后)");
             sb.AppendLine($"{indent}    /// </summary>");
             sb.AppendLine($"{indent}    protected override async UniTask OnAfterOpen()");
             sb.AppendLine($"{indent}    {{");
@@ -184,7 +184,7 @@ namespace Vant.Editor
             sb.AppendLine($"{indent}    }}");
             sb.AppendLine();
             sb.AppendLine($"{indent}    /// <summary>");
-            sb.AppendLine($"{indent}    /// 5. 关闭前调用");
+            sb.AppendLine($"{indent}    /// 关闭前调用");
             sb.AppendLine($"{indent}    /// </summary>");
             sb.AppendLine($"{indent}    protected override async UniTask OnBeforeClose()");
             sb.AppendLine($"{indent}    {{");
@@ -192,7 +192,7 @@ namespace Vant.Editor
             sb.AppendLine($"{indent}    }}");
             sb.AppendLine();
             sb.AppendLine($"{indent}    /// <summary>");
-            sb.AppendLine($"{indent}    /// 7. 销毁时调用");
+            sb.AppendLine($"{indent}    /// 销毁时调用");
             sb.AppendLine($"{indent}    /// </summary>");
             sb.AppendLine($"{indent}    protected override void OnDestroyUI()");
             sb.AppendLine($"{indent}    {{");

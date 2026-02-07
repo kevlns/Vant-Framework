@@ -128,6 +128,7 @@ namespace Vant.UI.UIFramework
             // 注册事件监听
             _appCore.Notifier.AddListener<string, object>(UIInternalEvent.OPEN_UI, OnOpenUIEvent);
             _appCore.Notifier.AddListener<string>(UIInternalEvent.CLOSE_UI, OnCloseUIEvent);
+            _appCore.Notifier.AddListener<UILayer[]>(UIInternalEvent.CLOSE_ALL_IN_LAYERS, OnCloseAllInLayersEvent);
 
             // 初始化层级
             _layerRoots = new Dictionary<UILayer, Transform>();
@@ -252,16 +253,6 @@ namespace Vant.UI.UIFramework
         }
 
         /// <summary>
-        /// 打开 UI (泛型版本)
-        /// </summary>
-        private async UniTask<T> Open<T>(UIConfig config, object args = null) where T : AbstractUIBase, new()
-        {
-            if (config.UIClass == null) config.UIClass = typeof(T);
-            var ui = await Open(config, args);
-            return ui as T;
-        }
-
-        /// <summary>
         /// 打开 UI (核心逻辑)
         /// </summary>
         private async UniTask<AbstractUIBase> Open(UIConfig config, object args = null)
@@ -288,7 +279,6 @@ namespace Vant.UI.UIFramework
                     ProcessStackOnOpen(activeUI);
                 }
 
-                // 3. 确保显示
                 await activeUI.InternalOpen(args);
 
                 _uiInstances.Add(activeUI);
@@ -491,6 +481,12 @@ namespace Vant.UI.UIFramework
             {
                 _closingSet.Remove(ui);
             }
+        }
+
+        // 实例级关闭，供 AbstractUIBase.CloseSelfAsync 调用
+        internal UniTask OpenInstanceAsync(UIConfig config, object args = null)
+        {
+            return Open(config, args);
         }
 
         // 实例级关闭，供 AbstractUIBase.CloseSelfAsync 调用
@@ -772,6 +768,11 @@ namespace Vant.UI.UIFramework
         #endregion
 
         #region Event Handlers
+
+        private void OnCloseAllInLayersEvent(UILayer[] layers)
+        {
+            CloseAllInLayers(layers);
+        }
 
         private void OnOpenUIEvent(string uiName, object args)
         {
