@@ -3,6 +3,9 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.SceneManagement;
+using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.ResourceManagement.ResourceProviders;
 using Object = UnityEngine.Object;
 
 namespace Vant.Resources
@@ -68,6 +71,24 @@ namespace Vant.Resources
         /// 清理对象池
         /// </summary>
         void ClearPool();
+
+        /// <summary>
+        /// 异步加载场景（返回句柄）
+        /// </summary>
+        SceneHandle LoadSceneAsync(string sceneKey, LoadSceneMode mode = LoadSceneMode.Single, bool activateOnLoad = true);
+
+        /// <summary>
+        /// 卸载场景（通过句柄）
+        /// </summary>
+        UniTask UnloadSceneAsync(SceneHandle handle);
+    }
+
+    public struct SceneHandle
+    {
+        public string SceneKey;
+        public bool IsAddressable;
+        public AsyncOperationHandle<SceneInstance> AddressableHandle;
+        public AsyncOperation BuiltinLoadOp;
     }
 
     /// <summary>
@@ -95,6 +116,8 @@ namespace Vant.Resources
         public abstract UniTask<T> LoadAssetAsync<T>(string path, string packageName = null, Action<float> onProgress = null, CancellationToken cancellationToken = default) where T : Object;
         public abstract void ReleaseAsset(string path, string packageName = null);
         public abstract void ClearUnused();
+        public abstract SceneHandle LoadSceneAsync(string sceneKey, LoadSceneMode mode = LoadSceneMode.Single, bool activateOnLoad = true);
+        public abstract UniTask UnloadSceneAsync(SceneHandle handle);
 
         public virtual async UniTask<List<T>> LoadAssetsAsync<T>(IEnumerable<string> paths, string packageName = null, Action<float> onProgress = null, CancellationToken cancellationToken = default) where T : Object
         {

@@ -8,7 +8,8 @@ namespace Vant.System.Guide
         EnableGuide,
         DisableGuide,
         UpdateFinishedGuideSteps,
-        TryStartGuide
+        TryStartGuide,
+        StopCurrentGuideGroup
     }
 
     /// <summary>

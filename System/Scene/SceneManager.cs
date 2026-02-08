@@ -19,7 +19,7 @@ namespace Vant.System.Scene
     /// </summary>
     public interface ISceneManager
     {
-        UniTask LoadSceneAsync(string sceneKey, LoadSceneMode mode = LoadSceneMode.Single, bool activateOnLoad = true, global::System.Action<float> onProgress = null, CancellationToken cancellationToken = default);
+        UniTask LoadSceneAsync(string sceneKey, LoadSceneMode mode = LoadSceneMode.Single, bool activateOnLoad = true, global::System.Action<float> onProgress = null, global::System.Action onCompleted = null, CancellationToken cancellationToken = default);
         UniTask UnloadSceneAsync(string sceneKey);
         UniTask ActivateSceneAsync(string sceneKey, global::System.Action<float> onProgress = null, CancellationToken cancellationToken = default);
         bool IsSceneLoaded(string sceneKey);
@@ -182,7 +182,7 @@ namespace Vant.System.Scene
             return true;
         }
 
-        public async UniTask LoadSceneAsync(string sceneKey, LoadSceneMode mode = LoadSceneMode.Single, bool activateOnLoad = true, global::System.Action<float> onProgress = null, CancellationToken cancellationToken = default)
+        public async UniTask LoadSceneAsync(string sceneKey, LoadSceneMode mode = LoadSceneMode.Single, bool activateOnLoad = true, global::System.Action<float> onProgress = null, global::System.Action onCompleted = null, CancellationToken cancellationToken = default)
         {
             if (string.IsNullOrEmpty(sceneKey))
             {
@@ -207,6 +207,10 @@ namespace Vant.System.Scene
                 {
                     AddProgressCallback(state.LoadInFlight, onProgress);
                     await state.LoadInFlight.CompletionSource.Task;
+                    if (state.AddressableHandle.IsValid() && state.AddressableHandle.IsDone && state.AddressableHandle.Status == AsyncOperationStatus.Succeeded)
+                    {
+                        onCompleted?.Invoke();
+                    }
                     return;
                 }
 
@@ -221,22 +225,24 @@ namespace Vant.System.Scene
                 {
                     await ActivateSceneAsync(sceneKey, null);
                 }
+                onCompleted?.Invoke();
                 return;
             }
 
-            if (_assetManager is AddressablesManager)
-            {
-                // 如果之前有已完成的 CTS，清理它（不 Cancel，因为已完成）
-                state.LoadCts?.Dispose();
-                state.LoadCts = TaskManager.Instance.CreateLinkedCTS(cancellationToken);
-                var loadToken = state.LoadCts.Token;
+            // 如果之前有已完成的 CTS，清理它（不 Cancel，因为已完成）
+            state.LoadCts?.Dispose();
+            state.LoadCts = TaskManager.Instance.CreateLinkedCTS(cancellationToken);
+            var loadToken = state.LoadCts.Token;
 
-                var handle = Addressables.LoadSceneAsync(sceneKey, mode, activateOnLoad);
-                state.IsAddressable = true;
+            var handle = _assetManager.LoadSceneAsync(sceneKey, mode, activateOnLoad);
+            state.IsAddressable = handle.IsAddressable;
+            state.Context = requestContext;
+            state.HasContext = true;
+
+            if (handle.IsAddressable)
+            {
                 state.HasAddressableHandle = true;
-                state.AddressableHandle = handle;
-                state.Context = requestContext;
-                state.HasContext = true;
+                state.AddressableHandle = handle.AddressableHandle;
 
                 var inflight = new LoadInFlight { Context = requestContext };
                 AddProgressCallback(inflight, onProgress);
@@ -244,7 +250,7 @@ namespace Vant.System.Scene
 
                 try
                 {
-                    while (!handle.IsDone)
+                    while (!handle.AddressableHandle.IsDone)
                     {
                         if (loadToken.IsCancellationRequested)
                         {
@@ -252,7 +258,7 @@ namespace Vant.System.Scene
                             return;
                         }
 
-                        InvokeProgress(inflight, handle.PercentComplete);
+                        InvokeProgress(inflight, handle.AddressableHandle.PercentComplete);
                         await UniTask.Yield(PlayerLoopTiming.Update);
                     }
 
@@ -262,8 +268,8 @@ namespace Vant.System.Scene
                         return;
                     }
 
-                    await AddressablesAsyncExtensions.ToUniTask(handle);
-                    if (handle.Status != AsyncOperationStatus.Succeeded)
+                    await AddressablesAsyncExtensions.ToUniTask(handle.AddressableHandle);
+                    if (handle.AddressableHandle.Status != AsyncOperationStatus.Succeeded)
                     {
                         Debug.LogError($"[SceneManager] Failed to load addressable scene: {sceneKey}");
                         inflight.CompletionSource.TrySetResult(false);
@@ -280,10 +286,12 @@ namespace Vant.System.Scene
                             {
                                 await ActivateSceneAsync(sceneKey, null);
                             }
+                            onCompleted?.Invoke();
                             return;
                         }
                         InvokeProgress(inflight, 1f);
                         inflight.CompletionSource.TrySetResult(true);
+                        onCompleted?.Invoke();
                     }
                 }
                 catch (global::System.Exception e)
@@ -309,6 +317,7 @@ namespace Vant.System.Scene
                 {
                     await ActivateSceneAsync(sceneKey, null);
                 }
+                onCompleted?.Invoke();
                 return;
             }
 
@@ -317,17 +326,16 @@ namespace Vant.System.Scene
                 if (!EnsureContext(state, sceneKey, requestContext, "builtin")) return;
                 AddProgressCallback(state.LoadInFlight, onProgress);
                 await state.LoadInFlight.CompletionSource.Task;
+                if (IsSceneLoaded(sceneKey))
+                {
+                    onCompleted?.Invoke();
+                }
                 return;
             }
 
-            var op = UnitySceneManager.LoadSceneAsync(sceneKey, mode);
+            var op = handle.BuiltinLoadOp;
             if (op != null)
             {
-                // 如果之前有已完成的 CTS，清理它（不 Cancel，因为已完成）
-                state.LoadCts?.Dispose();
-                state.LoadCts = TaskManager.Instance.CreateLinkedCTS(cancellationToken);
-                var loadToken = state.LoadCts.Token;
-
                 state.IsAddressable = false;
                 state.BuiltinLoadOp = op;
                 state.Context = requestContext;
@@ -386,6 +394,7 @@ namespace Vant.System.Scene
 
                     InvokeProgress(inflight, 1f);
                     inflight.CompletionSource.TrySetResult(true);
+                    onCompleted?.Invoke();
                 }
                 finally
                 {
@@ -424,21 +433,12 @@ namespace Vant.System.Scene
 
             if (_sceneStates.TryGetValue(sceneKey, out var addressableState) && addressableState.HasAddressableHandle && addressableState.AddressableHandle.IsValid())
             {
-                var unloadHandle = Addressables.UnloadSceneAsync(addressableState.AddressableHandle, true);
-                await AddressablesAsyncExtensions.ToUniTask(unloadHandle);
+                await _assetManager.UnloadSceneAsync(CreateSceneHandle(sceneKey, addressableState));
                 ResetState(sceneKey, addressableState, true, false);
                 return;
             }
 
-            var scene = UnitySceneManager.GetSceneByName(sceneKey);
-            if (scene.isLoaded)
-            {
-                var op = UnitySceneManager.UnloadSceneAsync(scene);
-                if (op != null)
-                {
-                    await op.ToUniTask();
-                }
-            }
+            await _assetManager.UnloadSceneAsync(CreateSceneHandle(sceneKey, null));
 
             if (_sceneStates.TryGetValue(sceneKey, out var cleanupState))
             {
@@ -582,6 +582,17 @@ namespace Vant.System.Scene
                     state.ActivateCts = null;
                 }
             }
+        }
+
+        private static SceneHandle CreateSceneHandle(string sceneKey, SceneLoadState state)
+        {
+            return new SceneHandle
+            {
+                SceneKey = sceneKey,
+                IsAddressable = state != null && state.HasAddressableHandle && state.AddressableHandle.IsValid(),
+                AddressableHandle = state != null ? state.AddressableHandle : default,
+                BuiltinLoadOp = state != null ? state.BuiltinLoadOp : null
+            };
         }
     }
 }

@@ -70,6 +70,7 @@ namespace Vant.System.Guide
             _appCore.Notifier.AddListener(GuideInternalEvent.DisableGuide, OnDisableGuide);
             _appCore.Notifier.AddListener(GuideInternalEvent.UpdateFinishedGuideSteps, OnUpdateFinishedGuideSteps);
             _appCore.Notifier.AddListener(GuideInternalEvent.TryStartGuide, OnTryStartGuide);
+            _appCore.Notifier.AddListener(GuideInternalEvent.StopCurrentGuideGroup, OnStopCurrentGuideGroup);
         }
 
         public void SetupExtractors(DataExtractors dataExtractors)
@@ -196,6 +197,16 @@ namespace Vant.System.Guide
             InternalTryStartGuide();
         }
 
+        private void OnStopCurrentGuideGroup(object data)
+        {
+            if (_groupCTS != null)
+            {
+                _groupCTS.Cancel();
+            }
+            DisposeAllCTS();
+            _currentStep = null;
+        }
+
         private void InternalTryStartGuide()
         {
             ConditionContext.UpdateContext();
@@ -207,9 +218,9 @@ namespace Vant.System.Guide
             var steps = _dataCore.GetGuideGroupSteps?.Invoke(topGroupData);
             steps = _dataCore.SortGuideSteps?.Invoke(steps) ?? steps;
 
-            _stepCTS?.Dispose();
             _groupCTS?.Dispose();
             _groupCTS = TaskManager.Instance.CreateLinkedCTS();
+            _stepCTS?.Dispose();
             _stepCTS = TaskManager.Instance.CreateLinkedCTS(_groupCTS.Token);
             try
             {
@@ -264,17 +275,7 @@ namespace Vant.System.Guide
             }
         }
 
-        public void StopCurrentGuide()
-        {
-            if (_stepCTS != null)
-            {
-                _stepCTS.Cancel();
-                DisposeCTS();
-            }
-            _currentStep = null;
-        }
-
-        private void DisposeCTS()
+        private void DisposeAllCTS()
         {
             _stepCTS?.Dispose();
             _stepCTS = null;
