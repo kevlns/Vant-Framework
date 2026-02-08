@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
 namespace Vant.Resources
@@ -326,6 +327,39 @@ namespace Vant.Resources
             }
 
             UnityEngine.Resources.UnloadUnusedAssets();
+        }
+
+        public override SceneHandle LoadSceneAsync(string sceneKey, LoadSceneMode mode = LoadSceneMode.Single, bool activateOnLoad = true)
+        {
+            var op = UnityEngine.SceneManagement.SceneManager.LoadSceneAsync(sceneKey, mode);
+            if (op != null)
+            {
+                op.allowSceneActivation = activateOnLoad;
+            }
+
+            return new SceneHandle
+            {
+                SceneKey = sceneKey,
+                IsAddressable = false,
+                AddressableHandle = default,
+                BuiltinLoadOp = op
+            };
+        }
+
+        public override async UniTask UnloadSceneAsync(SceneHandle handle)
+        {
+            if (!string.IsNullOrEmpty(handle.SceneKey))
+            {
+                var scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(handle.SceneKey);
+                if (scene.isLoaded)
+                {
+                    var op = UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
+                    if (op != null)
+                    {
+                        await op.ToUniTask();
+                    }
+                }
+            }
         }
     }
 }

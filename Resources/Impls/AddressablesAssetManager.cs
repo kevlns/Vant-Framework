@@ -5,6 +5,7 @@ using Cysharp.Threading.Tasks;
 using UnityEngine;
 using UnityEngine.AddressableAssets;
 using UnityEngine.ResourceManagement.AsyncOperations;
+using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
 namespace Vant.Resources
@@ -313,6 +314,41 @@ namespace Vant.Resources
             foreach (var key in toRemove)
             {
                 ReleaseAsset(key);
+            }
+        }
+
+        public override SceneHandle LoadSceneAsync(string sceneKey, LoadSceneMode mode = LoadSceneMode.Single, bool activateOnLoad = true)
+        {
+            var handle = Addressables.LoadSceneAsync(sceneKey, mode, activateOnLoad);
+            return new SceneHandle
+            {
+                SceneKey = sceneKey,
+                IsAddressable = true,
+                AddressableHandle = handle,
+                BuiltinLoadOp = null
+            };
+        }
+
+        public override async UniTask UnloadSceneAsync(SceneHandle handle)
+        {
+            if (handle.IsAddressable && handle.AddressableHandle.IsValid())
+            {
+                var unloadHandle = Addressables.UnloadSceneAsync(handle.AddressableHandle, true);
+                await AddressablesAsyncExtensions.ToUniTask(unloadHandle);
+                return;
+            }
+
+            if (!string.IsNullOrEmpty(handle.SceneKey))
+            {
+                var scene = UnityEngine.SceneManagement.SceneManager.GetSceneByName(handle.SceneKey);
+                if (scene.isLoaded)
+                {
+                    var op = UnityEngine.SceneManagement.SceneManager.UnloadSceneAsync(scene);
+                    if (op != null)
+                    {
+                        await op.ToUniTask();
+                    }
+                }
             }
         }
     }
